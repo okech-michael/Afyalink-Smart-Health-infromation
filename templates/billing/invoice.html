@@ -1,0 +1,501 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Invoice — AfyaLink{% endblock %}
+
+{% block nav_invoice %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Invoice</h1>
+    <p>{{ request.user.profile.facility.name }}</p>
+  </div>
+  <a href="{% url 'billing_dashboard' %}" class="btn btn-secondary">Back to billing</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="invoice-layout">
+<div class="invoice-main">
+
+  {% if visit %}
+
+  <!-- Invoice document -->
+  <div class="card invoice-doc" id="invoice-printable">
+
+    <!-- Header -->
+    <div class="invoice-header">
+      <div>
+        <p class="facility-name-lg">{{ visit.facility.name }}</p>
+        <p class="facility-address text-muted">{{ visit.facility.address|default:"" }}</p>
+        <p class="facility-phone text-muted">{{ visit.facility.phone|default:"" }}</p>
+      </div>
+      <div class="invoice-meta-right">
+        <p class="invoice-title">Invoice</p>
+        <p class="invoice-number text-muted">#{{ invoice.id|default:"DRAFT" }}</p>
+        <p class="invoice-date text-muted">{{ today|date:"j F Y" }}</p>
+      </div>
+    </div>
+
+    <hr class="invoice-rule" />
+
+    <!-- Patient + visit info -->
+    <div class="invoice-parties">
+      <div>
+        <p class="parties-label">Patient</p>
+        <p class="parties-name">{{ visit.patient.get_full_name }}</p>
+        <p class="text-muted" style="font-size:12px;">
+          {{ visit.patient.profile.phone_number|default:"" }}<br>
+          ID: {{ visit.patient.profile.id_number|default:"—" }}
+        </p>
+      </div>
+      <div>
+        <p class="parties-label">Visit details</p>
+        <table class="meta-table">
+          <tr><td>Visit #</td><td>{{ visit.id }}</td></tr>
+          <tr><td>Date</td><td>{{ visit.date|date:"j M Y" }}</td></tr>
+          <tr><td>Type</td><td>{{ visit.get_visit_type_display }}</td></tr>
+          <tr><td>Doctor</td><td>Dr. {{ visit.doctor.get_full_name|default:"—" }}</td></tr>
+          <tr><td>Payment</td><td>{{ visit.get_payment_mode_display }}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <hr class="invoice-rule" />
+
+    <!-- Line items -->
+    <table class="line-items-table">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Qty</th>
+          <th class="text-right">Unit price (KES)</th>
+          <th class="text-right">Total (KES)</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- Consultation -->
+        {% if invoice.consultation_fee %}
+        <tr>
+          <td>Consultation fee</td>
+          <td>1</td>
+          <td class="text-right">{{ invoice.consultation_fee|floatformat:2 }}</td>
+          <td class="text-right">{{ invoice.consultation_fee|floatformat:2 }}</td>
+        </tr>
+        {% endif %}
+
+        <!-- Lab tests -->
+        {% for result in visit.lab_results.all %}
+        <tr>
+          <td>Laboratory — {{ result.test_name }}</td>
+          <td>1</td>
+          <td class="text-right">{{ result.cost|floatformat:2|default:"0.00" }}</td>
+          <td class="text-right">{{ result.cost|floatformat:2|default:"0.00" }}</td>
+        </tr>
+        {% endfor %}
+
+        <!-- Pharmacy -->
+        {% for rx in visit.prescriptions.filter(dispensed=True) %}
+        <tr>
+          <td>Pharmacy — {{ rx.drug_name }} {{ rx.dosage }}</td>
+          <td>{{ rx.quantity_dispensed|default:"1" }}</td>
+          <td class="text-right">{{ rx.unit_price|floatformat:2|default:"0.00" }}</td>
+          <td class="text-right">{{ rx.line_total|floatformat:2|default:"0.00" }}</td>
+        </tr>
+        {% endfor %}
+
+        <!-- Other charges -->
+        {% if invoice.other_fee %}
+        <tr>
+          <td>Other charges</td>
+          <td>1</td>
+          <td class="text-right">{{ invoice.other_fee|floatformat:2 }}</td>
+          <td class="text-right">{{ invoice.other_fee|floatformat:2 }}</td>
+        </tr>
+        {% endif %}
+
+      </tbody>
+      <tfoot>
+        <tr class="subtotal-row">
+          <td colspan="3">Subtotal</td>
+          <td class="text-right">KES {{ invoice.subtotal|floatformat:2|default:"0.00" }}</td>
+        </tr>
+        {% if invoice.discount %}
+        <tr>
+          <td colspan="3">Discount</td>
+          <td class="text-right">- KES {{ invoice.discount|floatformat:2 }}</td>
+        </tr>
+        {% endif %}
+        <tr class="total-row">
+          <td colspan="3">Total due</td>
+          <td class="text-right">KES {{ invoice.total_cost|floatformat:2|default:"0.00" }}</td>
+        </tr>
+        <tr>
+          <td colspan="3">
+            Payment status
+          </td>
+          <td class="text-right">
+            <span class="badge
+              {% if invoice.paid %}badge-green{% else %}badge-amber{% endif %}">
+              {% if invoice.paid %}Paid{% else %}Unpaid{% endif %}
+            </span>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- Diagnosis note -->
+    {% if visit.consultation.diagnosis %}
+    <div class="diagnosis-note">
+      <p class="diagnosis-note-label">Diagnosis</p>
+      <p class="diagnosis-note-value">{{ visit.consultation.diagnosis }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div class="invoice-footer-note">
+      <p>
+        This invoice was generated automatically by AfyaLink.
+        For queries contact {{ visit.facility.name }} on {{ visit.facility.phone|default:"the facility directly" }}.
+      </p>
+    </div>
+
+  </div>
+
+  <!-- Actions -->
+  <div class="invoice-actions">
+    {% if not invoice.paid %}
+    <form method="POST" action="{% url 'billing_invoice' %}">
+      {% csrf_token %}
+      <input type="hidden" name="visit_id" value="{{ visit.id }}" />
+      <input type="hidden" name="action" value="mark_paid" />
+      <button type="submit" class="btn btn-primary">Mark as paid</button>
+    </form>
+    {% endif %}
+    <button type="button" onclick="window.print()" class="btn btn-secondary">Print invoice</button>
+    <a href="{% url 'billing_dashboard' %}" class="btn btn-secondary">Back to billing</a>
+  </div>
+
+  {% else %}
+
+  <!-- Search for visit to invoice -->
+  <div class="card">
+    <p class="card-title">Find visit to invoice</p>
+    <form method="GET" action="{% url 'billing_invoice' %}">
+      <div class="search-row">
+        <input
+          type="text"
+          name="q"
+          value="{{ request.GET.q|default:'' }}"
+          placeholder="Search by patient name"
+          class="search-input"
+        />
+        <button type="submit" class="btn btn-primary">Search</button>
+      </div>
+    </form>
+
+    {% if search_results %}
+    <div class="search-results-list mt-16">
+      {% for v in search_results %}
+      <a href="{% url 'billing_invoice' %}?visit={{ v.id }}"
+         class="search-result-item">
+        <p class="result-name">{{ v.patient.get_full_name }}</p>
+        <p class="result-meta">
+          Visit #{{ v.id }}
+          &mdash; {{ v.date|date:"j M Y" }}
+          &mdash; {{ v.get_visit_type_display }}
+          &mdash;
+          {% if v.invoice %}
+            KES {{ v.invoice.total_cost|floatformat:2 }}
+          {% else %}
+            No invoice yet
+          {% endif %}
+        </p>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- ASIDE: All invoices today -->
+<aside class="invoice-aside">
+  <div class="card">
+    <p class="card-title">Today's invoices</p>
+    {% if today_invoices %}
+      {% for inv in today_invoices %}
+      <a href="{% url 'billing_invoice' %}?visit={{ inv.visit.id }}"
+         class="invoice-list-item">
+        <div>
+          <p class="inv-patient">{{ inv.visit.patient.get_full_name }}</p>
+          <p class="inv-meta text-muted">Visit #{{ inv.visit.id }}</p>
+        </div>
+        <div class="inv-right">
+          <p class="inv-amount">KES {{ inv.total_cost|floatformat:0 }}</p>
+          <span class="badge {% if inv.paid %}badge-green{% else %}badge-amber{% endif %}">
+            {% if inv.paid %}Paid{% else %}Unpaid{% endif %}
+          </span>
+        </div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">No invoices generated today.</p>
+    {% endif %}
+  </div>
+</aside>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .invoice-layout {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .invoice-main { min-width: 0; }
+
+  /* Invoice document */
+  .invoice-doc { padding: 28px 32px; }
+
+  .invoice-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+
+  .facility-name-lg {
+    font-size: 18px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 4px;
+  }
+
+  .facility-address, .facility-phone { font-size: 12px; font-family: Arial, sans-serif; }
+
+  .invoice-meta-right { text-align: right; }
+
+  .invoice-title {
+    font-size: 22px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 4px;
+  }
+
+  .invoice-number, .invoice-date { font-size: 12px; font-family: Arial, sans-serif; }
+
+  .invoice-rule {
+    border: none;
+    border-top: 1px solid var(--gray-300);
+    margin: 18px 0;
+  }
+
+  .invoice-parties {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
+
+  .parties-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    margin-bottom: 4px;
+  }
+
+  .parties-name {
+    font-size: 15px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 4px;
+  }
+
+  .meta-table {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .meta-table td { padding: 3px 0; color: var(--gray-700); }
+  .meta-table td:first-child { color: var(--gray-500); width: 70px; }
+
+  /* Line items */
+  .line-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    margin-bottom: 20px;
+  }
+
+  .line-items-table thead th {
+    background: var(--gray-100);
+    padding: 8px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray-500);
+    border-bottom: 1px solid var(--gray-300);
+    text-align: left;
+  }
+
+  .line-items-table tbody td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    vertical-align: middle;
+  }
+
+  .line-items-table tbody tr:last-child td { border-bottom: none; }
+
+  .subtotal-row td {
+    padding: 8px 10px;
+    border-top: 1px solid var(--gray-300);
+    color: var(--gray-500);
+    font-size: 12px;
+  }
+
+  .total-row td {
+    padding: 10px 10px;
+    border-top: 2px solid var(--gray-700);
+    font-weight: bold;
+    font-family: Georgia, serif;
+    font-size: 16px;
+    color: var(--blue-dark);
+  }
+
+  .line-items-table tfoot tr:last-child td { border-bottom: none; }
+
+  /* Diagnosis note */
+  .diagnosis-note {
+    background: var(--gray-100);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-family: Arial, sans-serif;
+  }
+
+  .diagnosis-note-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    margin-bottom: 4px;
+  }
+
+  .diagnosis-note-value { font-size: 13px; color: var(--gray-700); }
+
+  /* Footer note */
+  .invoice-footer-note {
+    border-top: 1px solid var(--gray-200);
+    padding-top: 14px;
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* Action buttons */
+  .invoice-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 16px;
+    margin-bottom: 24px;
+  }
+
+  /* Search */
+  .search-row { display: flex; gap: 10px; }
+
+  .search-input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: Georgia, serif;
+  }
+
+  .search-input:focus { outline: none; border-color: var(--blue); }
+
+  .search-results-list { border: 1px solid var(--gray-300); border-radius: var(--radius); overflow: hidden; }
+
+  .search-result-item {
+    display: block;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--gray-200);
+    text-decoration: none;
+    transition: background 0.1s;
+  }
+
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: var(--blue-light); text-decoration: none; }
+
+  .result-name { font-weight: bold; color: var(--blue-dark); font-family: Georgia, serif; font-size: 14px; }
+  .result-meta { font-size: 12px; color: var(--gray-500); font-family: Arial, sans-serif; margin-top: 2px; }
+
+  /* Aside */
+  .invoice-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--gray-200);
+    text-decoration: none;
+    gap: 8px;
+    transition: background 0.1s;
+  }
+
+  .invoice-list-item:last-child { border-bottom: none; }
+  .invoice-list-item:hover { text-decoration: none; }
+
+  .inv-patient { font-size: 13px; font-weight: bold; font-family: Georgia, serif; color: var(--blue-dark); }
+  .inv-meta { font-size: 11px; margin-top: 2px; }
+  .inv-right { text-align: right; flex-shrink: 0; }
+  .inv-amount { font-size: 13px; font-weight: bold; font-family: Georgia, serif; color: var(--green); margin-bottom: 3px; }
+
+  /* Print */
+  @media print {
+    .sidebar, .topbar, .footer, .invoice-actions, .invoice-aside, .page-header { display: none !important; }
+    .invoice-layout { display: block; }
+    .invoice-doc { border: none; box-shadow: none; padding: 0; }
+    body { background: white; }
+  }
+
+  @media (max-width: 860px) {
+    .invoice-layout { grid-template-columns: 1fr; }
+    .invoice-aside { order: -1; }
+    .invoice-parties { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 560px) {
+    .invoice-header { flex-direction: column; gap: 12px; }
+    .invoice-meta-right { text-align: left; }
+    .invoice-actions { flex-direction: column; }
+    .invoice-actions .btn { text-align: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}

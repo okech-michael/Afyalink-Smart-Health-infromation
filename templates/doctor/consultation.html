@@ -1,0 +1,811 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Consultation — {{ visit.patient.get_full_name }} — AfyaLink{% endblock %}
+
+{% block nav_consultation %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Consultation — {{ visit.patient.get_full_name }}</h1>
+    <p>
+      Visit #{{ visit.id }}
+      &mdash; {{ visit.date|date:"j F Y" }}
+      &mdash; {{ visit.get_visit_type_display }}
+      &mdash; Dr. {{ request.user.get_full_name }}
+    </p>
+  </div>
+  <a href="{% url 'doctor_dashboard' %}" class="btn btn-secondary">Back to queue</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="consult-layout">
+
+  <!-- ── LEFT: Consultation form ── -->
+  <div class="consult-main">
+
+    <!-- Pre-arrival symptoms (read-only reference) -->
+    {% if visit.symptom_entry %}
+    <div class="card ref-card">
+      <p class="card-title">
+        Patient-reported symptoms
+        <span class="card-title-sub">Submitted before arriving</span>
+      </p>
+      <div class="ref-grid">
+        <div class="ref-item">
+          <p class="ref-label">Area</p>
+          <p class="ref-value">{{ visit.symptom_entry.body_part|title }}</p>
+        </div>
+        <div class="ref-item">
+          <p class="ref-label">Severity</p>
+          <p class="ref-value severity-{{ visit.symptom_entry.severity }}">
+            {{ visit.symptom_entry.severity|title }}
+          </p>
+        </div>
+        <div class="ref-item">
+          <p class="ref-label">Duration</p>
+          <p class="ref-value">
+            {{ visit.symptom_entry.duration_value }} {{ visit.symptom_entry.duration_unit }}
+          </p>
+        </div>
+        <div class="ref-item">
+          <p class="ref-label">Temperature reported</p>
+          <p class="ref-value">{{ visit.symptom_entry.temperature|default:"Not provided" }}</p>
+        </div>
+        <div class="ref-item ref-full">
+          <p class="ref-label">Description</p>
+          <p class="ref-value">{{ visit.symptom_entry.symptoms }}</p>
+        </div>
+        {% if visit.symptom_entry.current_medications %}
+        <div class="ref-item ref-full">
+          <p class="ref-label">Current medications</p>
+          <p class="ref-value">{{ visit.symptom_entry.current_medications }}</p>
+        </div>
+        {% endif %}
+        {% if visit.symptom_entry.known_allergies %}
+        <div class="ref-item ref-full">
+          <p class="ref-label">Known allergies</p>
+          <p class="ref-value allergy-value">{{ visit.symptom_entry.known_allergies }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Triage vitals (read-only reference) -->
+    {% if visit.vitals %}
+    <div class="card ref-card">
+      <p class="card-title">
+        Triage vitals
+        <span class="card-title-sub">Recorded by nurse</span>
+      </p>
+      <div class="vitals-strip">
+        <div class="vital-chip-lg">
+          <p class="vital-chip-label">Blood pressure</p>
+          <p class="vital-chip-value">{{ visit.vitals.blood_pressure|default:"—" }}</p>
+          <p class="vital-chip-unit">mmHg</p>
+        </div>
+        <div class="vital-chip-lg">
+          <p class="vital-chip-label">Temperature</p>
+          <p class="vital-chip-value">{{ visit.vitals.temperature|default:"—" }}</p>
+          <p class="vital-chip-unit">&deg;C</p>
+        </div>
+        <div class="vital-chip-lg">
+          <p class="vital-chip-label">Pulse</p>
+          <p class="vital-chip-value">{{ visit.vitals.pulse|default:"—" }}</p>
+          <p class="vital-chip-unit">bpm</p>
+        </div>
+        <div class="vital-chip-lg">
+          <p class="vital-chip-label">O2 sat.</p>
+          <p class="vital-chip-value">{{ visit.vitals.oxygen_saturation|default:"—" }}</p>
+          <p class="vital-chip-unit">%</p>
+        </div>
+        <div class="vital-chip-lg">
+          <p class="vital-chip-label">Weight</p>
+          <p class="vital-chip-value">{{ visit.vitals.weight|default:"—" }}</p>
+          <p class="vital-chip-unit">kg</p>
+        </div>
+        <div class="vital-chip-lg">
+          <p class="vital-chip-label">Priority</p>
+          <p class="vital-chip-value priority-{{ visit.vitals.priority }}">
+            {{ visit.vitals.priority|title }}
+          </p>
+          <p class="vital-chip-unit">&nbsp;</p>
+        </div>
+      </div>
+      {% if visit.vitals.nurse_notes %}
+      <p class="nurse-note">Nurse note: {{ visit.vitals.nurse_notes }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- ── CONSULTATION FORM ── -->
+    <form method="POST" action="{% url 'doctor_consultation' visit.patient.id %}">
+      {% csrf_token %}
+      <input type="hidden" name="visit_id" value="{{ visit.id }}" />
+
+      <!-- Clinical findings -->
+      <div class="card">
+        <p class="card-title">Clinical findings</p>
+
+        <div class="form-group">
+          <label for="clinical_findings">Examination findings</label>
+          <textarea
+            id="clinical_findings"
+            name="clinical_findings"
+            rows="4"
+            placeholder="Record your physical examination findings here..."
+            required
+          >{{ consultation.clinical_findings|default:'' }}</textarea>
+          {% if form.clinical_findings.errors %}
+            <p class="form-error">{{ form.clinical_findings.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="diagnosis">Diagnosis</label>
+            <input
+              type="text"
+              id="diagnosis"
+              name="diagnosis"
+              value="{{ consultation.diagnosis|default:'' }}"
+              placeholder="e.g. Acute malaria, Type 2 diabetes mellitus"
+              required
+            />
+            {% if form.diagnosis.errors %}
+              <p class="form-error">{{ form.diagnosis.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label for="icd_code">ICD-10 code (optional)</label>
+            <input
+              type="text"
+              id="icd_code"
+              name="icd_code"
+              value="{{ consultation.icd_code|default:'' }}"
+              placeholder="e.g. B50.0"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="treatment_plan">Treatment plan</label>
+          <textarea
+            id="treatment_plan"
+            name="treatment_plan"
+            rows="3"
+            placeholder="Outline the treatment plan and any instructions for the patient..."
+            required
+          >{{ consultation.treatment_plan|default:'' }}</textarea>
+          {% if form.treatment_plan.errors %}
+            <p class="form-error">{{ form.treatment_plan.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          <label for="doctor_notes">Additional notes</label>
+          <textarea
+            id="doctor_notes"
+            name="doctor_notes"
+            rows="2"
+            placeholder="Any other clinical notes (confidential, patient will not see these)"
+          >{{ consultation.doctor_notes|default:'' }}</textarea>
+        </div>
+
+      </div>
+
+      <!-- Prescriptions -->
+      <div class="card">
+        <div class="flex-between mb-16">
+          <p class="card-title" style="margin-bottom:0;border:none;padding:0;">Prescriptions</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="add-drug-btn">
+            Add drug
+          </button>
+        </div>
+
+        <div id="prescriptions-list">
+          {% if consultation.prescriptions.exists %}
+            {% for rx in consultation.prescriptions.all %}
+            <div class="prescription-row" data-index="{{ forloop.counter0 }}">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Drug name</label>
+                  <input type="text" name="drug_name_{{ forloop.counter0 }}"
+                    value="{{ rx.drug_name }}" placeholder="e.g. Amoxicillin" required />
+                </div>
+                <div class="form-group">
+                  <label>Dosage</label>
+                  <input type="text" name="dosage_{{ forloop.counter0 }}"
+                    value="{{ rx.dosage }}" placeholder="e.g. 500mg" required />
+                </div>
+                <div class="form-group">
+                  <label>Frequency</label>
+                  <input type="text" name="frequency_{{ forloop.counter0 }}"
+                    value="{{ rx.frequency }}" placeholder="e.g. Three times daily" required />
+                </div>
+                <div class="form-group">
+                  <label>Duration</label>
+                  <input type="text" name="duration_{{ forloop.counter0 }}"
+                    value="{{ rx.duration }}" placeholder="e.g. 7 days" required />
+                </div>
+              </div>
+              <button type="button" class="btn-remove-drug" onclick="removeDrug(this)">Remove</button>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted" id="no-drugs-msg">No drugs added yet. Click "Add drug" to prescribe.</p>
+          {% endif %}
+        </div>
+
+        <input type="hidden" name="prescription_count" id="prescription_count" value="{{ consultation.prescriptions.count|default:'0' }}" />
+
+      </div>
+
+      <!-- Lab test orders -->
+      <div class="card">
+        <div class="flex-between mb-16">
+          <p class="card-title" style="margin-bottom:0;border:none;padding:0;">Lab test orders</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="add-lab-btn">
+            Order test
+          </button>
+        </div>
+
+        <div id="lab-orders-list">
+          {% if lab_orders %}
+            {% for order in lab_orders %}
+            <div class="lab-order-row">
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label>Test name</label>
+                  <input type="text" name="lab_test_{{ forloop.counter0 }}"
+                    value="{{ order.test_name }}" placeholder="e.g. Full blood count" required />
+                </div>
+                <div class="form-group">
+                  <label>Urgency</label>
+                  <select name="lab_urgency_{{ forloop.counter0 }}">
+                    <option value="routine" {% if order.urgency == 'routine' %}selected{% endif %}>Routine</option>
+                    <option value="urgent"  {% if order.urgency == 'urgent' %}selected{% endif %}>Urgent</option>
+                    <option value="stat"    {% if order.urgency == 'stat' %}selected{% endif %}>STAT</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Notes</label>
+                  <input type="text" name="lab_notes_{{ forloop.counter0 }}"
+                    value="{{ order.notes|default:'' }}" placeholder="Optional" />
+                </div>
+              </div>
+              <button type="button" class="btn-remove-drug" onclick="removeDrug(this)">Remove</button>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted" id="no-labs-msg">No lab tests ordered yet.</p>
+          {% endif %}
+        </div>
+
+        <input type="hidden" name="lab_order_count" id="lab_order_count" value="{{ lab_orders|length|default:'0' }}" />
+
+      </div>
+
+      <!-- Referral -->
+      <div class="card">
+        <p class="card-title">Referral (if needed)</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="refer_to">Refer to facility</label>
+            <select id="refer_to" name="refer_to">
+              <option value="">No referral</option>
+              {% for facility in facilities %}
+                {% if facility.id != request.user.profile.facility.id %}
+                  <option value="{{ facility.id }}"
+                    {% if consultation.referral.referred_to.id == facility.id %}selected{% endif %}>
+                    {{ facility.name }} — Level {{ facility.level }}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="referral_urgency">Referral urgency</label>
+            <select id="referral_urgency" name="referral_urgency">
+              <option value="routine">Routine</option>
+              <option value="urgent">Urgent</option>
+              <option value="emergency">Emergency</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" id="referral-reason-group" style="display:none;">
+          <label for="referral_reason">Reason for referral</label>
+          <textarea
+            id="referral_reason"
+            name="referral_reason"
+            rows="2"
+            placeholder="Clinical reason for referring this patient..."
+          >{{ consultation.referral.reason|default:'' }}</textarea>
+        </div>
+
+      </div>
+
+      <!-- Follow-up -->
+      <div class="card">
+        <p class="card-title">Follow-up appointment</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="followup_date">Follow-up date</label>
+            <input
+              type="date"
+              id="followup_date"
+              name="followup_date"
+              value="{{ consultation.followup_date|date:'Y-m-d'|default:'' }}"
+            />
+            <p class="form-hint">Leave blank if no follow-up is needed.</p>
+          </div>
+          <div class="form-group">
+            <label for="followup_notes">Follow-up instructions</label>
+            <input
+              type="text"
+              id="followup_notes"
+              name="followup_notes"
+              value="{{ consultation.followup_notes|default:'' }}"
+              placeholder="e.g. Return if fever persists after 3 days"
+            />
+          </div>
+        </div>
+      </div>
+
+      {% if form.non_field_errors %}
+        <p class="form-error">{{ form.non_field_errors|join:", " }}</p>
+      {% endif %}
+
+      <div class="form-actions">
+        <a href="{% url 'doctor_dashboard' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" name="action" value="save" class="btn btn-secondary">
+          Save draft
+        </button>
+        <button type="submit" name="action" value="complete" class="btn btn-primary">
+          Complete &amp; send to pharmacy
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+
+
+  <!-- ── RIGHT: Patient summary sidebar ── -->
+  <aside class="consult-aside">
+
+    <!-- Patient info -->
+    <div class="card">
+      <p class="card-title">Patient</p>
+      <p class="patient-aside-name">{{ visit.patient.get_full_name }}</p>
+      <table class="aside-table">
+        <tr>
+          <td>Age</td>
+          <td>{{ visit.patient.profile.age|default:"Unknown" }}</td>
+        </tr>
+        <tr>
+          <td>Gender</td>
+          <td>{{ visit.patient.profile.gender|title|default:"—" }}</td>
+        </tr>
+        <tr>
+          <td>Phone</td>
+          <td>{{ visit.patient.profile.phone_number|default:"—" }}</td>
+        </tr>
+        <tr>
+          <td>ID no.</td>
+          <td>{{ visit.patient.profile.id_number|default:"—" }}</td>
+        </tr>
+        <tr>
+          <td>Facility</td>
+          <td>{{ visit.patient.profile.facility.name }}</td>
+        </tr>
+      </table>
+      <div class="mt-16">
+        <a href="{% url 'doctor_patient_history' %}?patient={{ visit.patient.id }}"
+           class="btn btn-secondary btn-sm" style="display:block;text-align:center;">
+          Full patient history
+        </a>
+      </div>
+    </div>
+
+    <!-- Past visits summary -->
+    <div class="card">
+      <p class="card-title">Previous diagnoses</p>
+      {% if past_visits %}
+        {% for pv in past_visits %}
+        <div class="past-visit-item">
+          <p class="past-visit-date">{{ pv.date|date:"j M Y" }}</p>
+          <p class="past-visit-diagnosis">{{ pv.consultation.diagnosis|default:"No diagnosis recorded" }}</p>
+          {% if pv.consultation.treatment_plan %}
+            <p class="past-visit-tx">{{ pv.consultation.treatment_plan|truncatechars:60 }}</p>
+          {% endif %}
+        </div>
+        {% if not forloop.last %}<hr class="item-divider">{% endif %}
+        {% endfor %}
+      {% else %}
+        <p class="text-muted">No previous visits on record.</p>
+      {% endif %}
+    </div>
+
+    <!-- Known allergies alert -->
+    {% if visit.patient.profile.known_allergies or visit.symptom_entry.known_allergies %}
+    <div class="card allergy-card">
+      <p class="card-title allergy-title">Allergy alert</p>
+      <p class="allergy-text">
+        {{ visit.patient.profile.known_allergies|default:visit.symptom_entry.known_allergies }}
+      </p>
+    </div>
+    {% endif %}
+
+    <!-- Current visit status -->
+    <div class="card">
+      <p class="card-title">Visit status</p>
+      <table class="aside-table">
+        <tr>
+          <td>Check-in</td>
+          <td>{{ visit.check_in_time|time:"H:i"|default:"—" }}</td>
+        </tr>
+        <tr>
+          <td>Visit type</td>
+          <td>{{ visit.get_visit_type_display }}</td>
+        </tr>
+        <tr>
+          <td>Payment</td>
+          <td>{{ visit.get_payment_mode_display }}</td>
+        </tr>
+        <tr>
+          <td>Status</td>
+          <td>
+            <span class="badge
+              {% if visit.status == 'complete' %}badge-green
+              {% elif visit.status == 'in_progress' %}badge-blue
+              {% else %}badge-gray{% endif %}">
+              {{ visit.get_status_display }}
+            </span>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+  </aside>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  /* Two-column layout */
+  .consult-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .consult-main { min-width: 0; }
+
+  /* Reference card (symptoms + vitals, read-only) */
+  .ref-card { border-left: 3px solid var(--blue); }
+
+  .ref-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 24px;
+  }
+
+  .ref-item { }
+  .ref-full { grid-column: 1 / -1; }
+
+  .ref-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    margin-bottom: 2px;
+  }
+
+  .ref-value {
+    font-size: 13px;
+    color: var(--gray-700);
+    line-height: 1.4;
+  }
+
+  .allergy-value { color: var(--red); font-weight: bold; }
+
+  .severity-critical { color: var(--red); font-weight: bold; }
+  .severity-severe   { color: #d97706; font-weight: bold; }
+  .severity-moderate { color: var(--gray-700); }
+  .severity-mild     { color: var(--green); }
+
+  /* Vitals strip */
+  .vitals-strip {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .vital-chip-lg {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 10px 8px;
+    text-align: center;
+  }
+
+  .vital-chip-label {
+    font-size: 9px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+    margin-bottom: 4px;
+  }
+
+  .vital-chip-value {
+    font-size: 18px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    line-height: 1;
+  }
+
+  .vital-chip-unit {
+    font-size: 10px;
+    color: var(--gray-500);
+    margin-top: 2px;
+    font-family: Arial, sans-serif;
+  }
+
+  .priority-high   { color: var(--red); }
+  .priority-medium { color: #d97706; }
+  .priority-low    { color: var(--green); }
+
+  .nurse-note {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    font-style: italic;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--gray-200);
+  }
+
+  /* Form rows */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-row-3 {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  .form-error {
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+  }
+
+  /* Prescription & lab rows */
+  .prescription-row, .lab-order-row {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+
+  .btn-remove-drug {
+    background: none;
+    border: none;
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    cursor: pointer;
+    padding: 4px 0;
+    text-decoration: underline;
+  }
+
+  .btn-remove-drug:hover { color: #991b1b; }
+
+  /* Form actions */
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+
+  /* Aside */
+  .patient-aside-name {
+    font-size: 15px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 12px;
+  }
+
+  .aside-table {
+    width: 100%;
+    font-size: 12px;
+    border-collapse: collapse;
+    font-family: Arial, sans-serif;
+  }
+
+  .aside-table td {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    vertical-align: top;
+  }
+
+  .aside-table td:first-child {
+    color: var(--gray-500);
+    width: 52px;
+    padding-right: 8px;
+  }
+
+  .aside-table tr:last-child td { border-bottom: none; }
+
+  .card-title-sub {
+    font-size: 11px;
+    font-weight: normal;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  /* Past visits */
+  .past-visit-item { padding: 8px 0; }
+
+  .past-visit-date {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    margin-bottom: 2px;
+  }
+
+  .past-visit-diagnosis {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+  }
+
+  .past-visit-tx {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    margin-top: 2px;
+  }
+
+  .item-divider {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 4px 0;
+  }
+
+  /* Allergy card */
+  .allergy-card { border-left: 3px solid var(--red); background: var(--red-light); }
+  .allergy-title { color: var(--red); }
+  .allergy-text  { color: var(--red); font-weight: bold; font-size: 14px; }
+
+  @media (max-width: 1040px) {
+    .vitals-strip { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @media (max-width: 860px) {
+    .consult-layout { grid-template-columns: 1fr; }
+    .consult-aside { order: -1; }
+    .vitals-strip { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @media (max-width: 560px) {
+    .form-row, .form-row-3 { grid-template-columns: 1fr; }
+    .vitals-strip { grid-template-columns: repeat(2, 1fr); }
+    .ref-grid { grid-template-columns: 1fr; }
+    .form-actions { flex-direction: column; }
+    .form-actions .btn { text-align: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+
+  // ── Add drug row ──
+  var drugCount = parseInt(document.getElementById('prescription_count').value);
+
+  document.getElementById('add-drug-btn').addEventListener('click', function () {
+    var noMsg = document.getElementById('no-drugs-msg');
+    if (noMsg) noMsg.remove();
+
+    var row = document.createElement('div');
+    row.className = 'prescription-row';
+    row.setAttribute('data-index', drugCount);
+    row.innerHTML =
+      '<div class="form-row">' +
+        '<div class="form-group"><label>Drug name</label>' +
+          '<input type="text" name="drug_name_' + drugCount + '" placeholder="e.g. Amoxicillin" required /></div>' +
+        '<div class="form-group"><label>Dosage</label>' +
+          '<input type="text" name="dosage_' + drugCount + '" placeholder="e.g. 500mg" required /></div>' +
+        '<div class="form-group"><label>Frequency</label>' +
+          '<input type="text" name="frequency_' + drugCount + '" placeholder="e.g. Three times daily" required /></div>' +
+        '<div class="form-group"><label>Duration</label>' +
+          '<input type="text" name="duration_' + drugCount + '" placeholder="e.g. 7 days" required /></div>' +
+      '</div>' +
+      '<button type="button" class="btn-remove-drug" onclick="removeDrug(this)">Remove</button>';
+
+    document.getElementById('prescriptions-list').appendChild(row);
+    drugCount++;
+    document.getElementById('prescription_count').value = drugCount;
+  });
+
+  // ── Add lab order row ──
+  var labCount = parseInt(document.getElementById('lab_order_count').value);
+
+  document.getElementById('add-lab-btn').addEventListener('click', function () {
+    var noMsg = document.getElementById('no-labs-msg');
+    if (noMsg) noMsg.remove();
+
+    var row = document.createElement('div');
+    row.className = 'lab-order-row';
+    row.innerHTML =
+      '<div class="form-row-3">' +
+        '<div class="form-group"><label>Test name</label>' +
+          '<input type="text" name="lab_test_' + labCount + '" placeholder="e.g. Full blood count" required /></div>' +
+        '<div class="form-group"><label>Urgency</label>' +
+          '<select name="lab_urgency_' + labCount + '">' +
+            '<option value="routine">Routine</option>' +
+            '<option value="urgent">Urgent</option>' +
+            '<option value="stat">STAT</option>' +
+          '</select></div>' +
+        '<div class="form-group"><label>Notes</label>' +
+          '<input type="text" name="lab_notes_' + labCount + '" placeholder="Optional" /></div>' +
+      '</div>' +
+      '<button type="button" class="btn-remove-drug" onclick="removeDrug(this)">Remove</button>';
+
+    document.getElementById('lab-orders-list').appendChild(row);
+    labCount++;
+    document.getElementById('lab_order_count').value = labCount;
+  });
+
+  // ── Remove any row ──
+  function removeDrug(btn) {
+    btn.closest('.prescription-row, .lab-order-row').remove();
+  }
+
+  // ── Show/hide referral reason ──
+  document.getElementById('refer_to').addEventListener('change', function () {
+    document.getElementById('referral-reason-group').style.display =
+      this.value ? 'block' : 'none';
+  });
+
+  // Trigger on load if referral already selected
+  if (document.getElementById('refer_to').value) {
+    document.getElementById('referral-reason-group').style.display = 'block';
+  }
+
+</script>
+{% endblock %}

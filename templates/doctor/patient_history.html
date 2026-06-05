@@ -1,0 +1,785 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+  {% if patient %}Patient History — {{ patient.get_full_name }}{% else %}Patient Search — AfyaLink{% endif %}
+{% endblock %}
+
+{% block nav_patient_history %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    {% if patient %}
+      <h1>{{ patient.get_full_name }}</h1>
+      <p>
+        Full medical history
+        &mdash; {{ patient.profile.facility.name }}
+        &mdash; Patient since {{ patient.date_joined|date:"M Y" }}
+      </p>
+    {% else %}
+      <h1>Patient history search</h1>
+      <p>Search for a patient to view their complete medical record across all facilities.</p>
+    {% endif %}
+  </div>
+  <div class="flex gap-8">
+    {% if patient %}
+      <a href="{% url 'doctor_consultation' patient.id %}" class="btn btn-primary">Start consultation</a>
+    {% endif %}
+    <a href="{% url 'doctor_dashboard' %}" class="btn btn-secondary">Back to queue</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── SEARCH BAR (always visible) ── -->
+<div class="card search-card">
+  <form method="GET" action="{% url 'doctor_patient_history' %}">
+    <div class="search-row">
+      <input
+        type="text"
+        name="q"
+        value="{{ request.GET.q|default:'' }}"
+        placeholder="Search by patient name, username or phone number"
+        class="search-input"
+        autofocus
+      />
+      <button type="submit" class="btn btn-primary">Search</button>
+      {% if patient %}
+        <a href="{% url 'doctor_patient_history' %}" class="btn btn-secondary">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+
+  <!-- Search results dropdown -->
+  {% if search_results and not patient %}
+    <div class="search-results-list">
+      {% for result in search_results %}
+      <a href="{% url 'doctor_patient_history' %}?patient={{ result.id }}"
+         class="search-result-item">
+        <p class="result-name">{{ result.get_full_name }}</p>
+        <p class="result-meta">
+          {{ result.profile.phone_number|default:"No phone" }}
+          &mdash; {{ result.profile.facility.name }}
+          &mdash; {{ result.profile.age|default:"Age unknown" }},
+          {{ result.profile.gender|title }}
+        </p>
+      </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if request.GET.q and not search_results and not patient %}
+    <p class="text-muted" style="margin-top:12px;">
+      No patients found for &ldquo;{{ request.GET.q }}&rdquo;.
+      <a href="{% url 'register' %}">Register new patient</a>
+    </p>
+  {% endif %}
+</div>
+
+
+{% if patient %}
+
+<!-- ── PATIENT PROFILE STRIP ── -->
+<div class="patient-strip card">
+  <div class="patient-strip-grid">
+
+    <div class="strip-item">
+      <p class="strip-label">Full name</p>
+      <p class="strip-value">{{ patient.get_full_name }}</p>
+    </div>
+    <div class="strip-item">
+      <p class="strip-label">Date of birth</p>
+      <p class="strip-value">{{ patient.profile.date_of_birth|date:"j M Y"|default:"—" }}</p>
+    </div>
+    <div class="strip-item">
+      <p class="strip-label">Age</p>
+      <p class="strip-value">{{ patient.profile.age|default:"—" }}</p>
+    </div>
+    <div class="strip-item">
+      <p class="strip-label">Gender</p>
+      <p class="strip-value">{{ patient.profile.gender|title|default:"—" }}</p>
+    </div>
+    <div class="strip-item">
+      <p class="strip-label">Phone</p>
+      <p class="strip-value">{{ patient.profile.phone_number|default:"—" }}</p>
+    </div>
+    <div class="strip-item">
+      <p class="strip-label">ID number</p>
+      <p class="strip-value">{{ patient.profile.id_number|default:"—" }}</p>
+    </div>
+    <div class="strip-item">
+      <p class="strip-label">Reg. facility</p>
+      <p class="strip-value">{{ patient.profile.facility.name }}</p>
+    </div>
+    <div class="strip-item">
+      <p class="strip-label">Payment mode</p>
+      <p class="strip-value">{{ patient.profile.payment_mode|title|default:"—" }}</p>
+    </div>
+
+  </div>
+
+  {% if patient.profile.known_allergies %}
+  <div class="allergy-strip">
+    <span class="allergy-strip-label">Allergy alert:</span>
+    <span class="allergy-strip-value">{{ patient.profile.known_allergies }}</span>
+  </div>
+  {% endif %}
+</div>
+
+
+<!-- ── SUMMARY STATS ── -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <p class="stat-label">Total visits</p>
+    <p class="stat-value">{{ total_visits|default:"0" }}</p>
+  </div>
+  <div class="stat-card">
+    <p class="stat-label">Facilities visited</p>
+    <p class="stat-value">{{ facilities_visited|default:"0" }}</p>
+  </div>
+  <div class="stat-card amber">
+    <p class="stat-label">Pending lab results</p>
+    <p class="stat-value">{{ pending_results|default:"0" }}</p>
+  </div>
+  <div class="stat-card green">
+    <p class="stat-label">Last visit</p>
+    <p class="stat-value" style="font-size:16px;">
+      {{ last_visit.date|date:"j M Y"|default:"None" }}
+    </p>
+  </div>
+</div>
+
+
+<!-- ── MAIN LAYOUT ── -->
+<div class="history-layout">
+
+  <!-- LEFT: Visit records -->
+  <div class="history-main">
+
+    <!-- Filter bar -->
+    <div class="card filter-bar">
+      <form method="GET" action="{% url 'doctor_patient_history' %}">
+        <input type="hidden" name="patient" value="{{ patient.id }}" />
+        <div class="filter-row">
+          <div class="filter-group filter-grow">
+            <label for="filter_facility">Facility</label>
+            <select id="filter_facility" name="facility">
+              <option value="">All facilities</option>
+              {% for facility in visited_facilities %}
+                <option value="{{ facility.id }}"
+                  {% if request.GET.facility == facility.id|stringformat:"s" %}selected{% endif %}>
+                  {{ facility.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter_from">From</label>
+            <input type="date" id="filter_from" name="from_date"
+              value="{{ request.GET.from_date|default:'' }}" />
+          </div>
+          <div class="filter-group">
+            <label for="filter_to">To</label>
+            <input type="date" id="filter_to" name="to_date"
+              value="{{ request.GET.to_date|default:'' }}" />
+          </div>
+          <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            <a href="{% url 'doctor_patient_history' %}?patient={{ patient.id }}"
+               class="btn btn-secondary btn-sm">Clear</a>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Visit records -->
+    {% if visits %}
+      {% for visit in visits %}
+      <div class="visit-record card">
+
+        <!-- Visit header -->
+        <div class="visit-record-head">
+          <div>
+            <p class="visit-record-date">{{ visit.date|date:"l, j F Y" }}</p>
+            <p class="visit-record-meta">
+              {{ visit.facility.name }}
+              &mdash; {{ visit.get_visit_type_display }}
+              {% if visit.doctor %}
+                &mdash; Dr. {{ visit.doctor.get_full_name }}
+              {% endif %}
+            </p>
+          </div>
+          <div class="visit-record-badges">
+            <span class="badge
+              {% if visit.status == 'complete' %}badge-green
+              {% elif visit.status == 'in_progress' %}badge-blue
+              {% else %}badge-gray{% endif %}">
+              {{ visit.get_status_display }}
+            </span>
+            {% if visit.referral %}
+              <span class="badge badge-amber">Referred</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Vitals -->
+        {% if visit.vitals %}
+        <div class="visit-section">
+          <p class="visit-section-label">Vitals</p>
+          <div class="vitals-row">
+            <span class="vital-pill">BP: {{ visit.vitals.blood_pressure|default:"—" }}</span>
+            <span class="vital-pill">Temp: {{ visit.vitals.temperature|default:"—" }}&deg;C</span>
+            <span class="vital-pill">Pulse: {{ visit.vitals.pulse|default:"—" }} bpm</span>
+            <span class="vital-pill">O2: {{ visit.vitals.oxygen_saturation|default:"—" }}%</span>
+            <span class="vital-pill">Wt: {{ visit.vitals.weight|default:"—" }} kg</span>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Diagnosis & treatment -->
+        {% if visit.consultation %}
+        <div class="visit-section">
+          <p class="visit-section-label">Diagnosis</p>
+          <p class="diagnosis-text">
+            {{ visit.consultation.diagnosis|default:"No diagnosis recorded" }}
+            {% if visit.consultation.icd_code %}
+              <span class="icd-code">({{ visit.consultation.icd_code }})</span>
+            {% endif %}
+          </p>
+          {% if visit.consultation.clinical_findings %}
+            <p class="findings-text">{{ visit.consultation.clinical_findings }}</p>
+          {% endif %}
+          {% if visit.consultation.treatment_plan %}
+          <p class="visit-section-label mt-8">Treatment plan</p>
+          <p class="findings-text">{{ visit.consultation.treatment_plan }}</p>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Prescriptions -->
+        {% if visit.prescriptions.exists %}
+        <div class="visit-section">
+          <p class="visit-section-label">Drugs prescribed</p>
+          <div class="drug-list">
+            {% for rx in visit.prescriptions.all %}
+            <span class="drug-pill">
+              {{ rx.drug_name }} {{ rx.dosage }} &mdash; {{ rx.frequency }}, {{ rx.duration }}
+            </span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Lab results -->
+        {% if visit.lab_results.exists %}
+        <div class="visit-section">
+          <p class="visit-section-label">Lab results</p>
+          <div class="table-wrap">
+            <table class="compact-table">
+              <thead>
+                <tr>
+                  <th>Test</th>
+                  <th>Result</th>
+                  <th>Normal range</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for result in visit.lab_results.all %}
+                <tr>
+                  <td>{{ result.test_name }}</td>
+                  <td>
+                    {% if result.result_value %}
+                      <strong>{{ result.result_value }} {{ result.unit }}</strong>
+                    {% else %}
+                      <span class="text-muted">Pending</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ result.normal_range|default:"—" }}</td>
+                  <td>
+                    <span class="badge
+                      {% if result.status == 'ready' %}badge-green
+                      {% elif result.status == 'pending' %}badge-amber
+                      {% elif result.status == 'abnormal' %}badge-red
+                      {% else %}badge-gray{% endif %}">
+                      {{ result.get_status_display }}
+                    </span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Referral -->
+        {% if visit.referral %}
+        <div class="visit-section referral-section">
+          <p class="visit-section-label">Referral</p>
+          <p class="referral-text">
+            Referred to <strong>{{ visit.referral.referred_to.name }}</strong>
+            &mdash; {{ visit.referral.get_urgency_display }}
+            &mdash; {{ visit.referral.reason|truncatechars:80 }}
+          </p>
+        </div>
+        {% endif %}
+
+        <!-- Cost -->
+        {% if visit.invoice %}
+        <div class="visit-footer">
+          <span class="cost-label">Total cost:</span>
+          <span class="cost-value">KES {{ visit.invoice.total_cost|floatformat:2 }}</span>
+          <span class="badge {% if visit.invoice.paid %}badge-green{% else %}badge-amber{% endif %}">
+            {% if visit.invoice.paid %}Paid{% else %}Unpaid{% endif %}
+          </span>
+        </div>
+        {% endif %}
+
+      </div>
+      {% endfor %}
+
+      <!-- Pagination -->
+      {% if visits.has_other_pages %}
+      <div class="pagination">
+        {% if visits.has_previous %}
+          <a href="?patient={{ patient.id }}&page={{ visits.previous_page_number }}{% if request.GET.facility %}&facility={{ request.GET.facility }}{% endif %}" class="btn btn-secondary btn-sm">Previous</a>
+        {% endif %}
+        <span class="pagination-info">Page {{ visits.number }} of {{ visits.paginator.num_pages }}</span>
+        {% if visits.has_next %}
+          <a href="?patient={{ patient.id }}&page={{ visits.next_page_number }}{% if request.GET.facility %}&facility={{ request.GET.facility }}{% endif %}" class="btn btn-secondary btn-sm">Next</a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    {% else %}
+      <div class="empty-state card">
+        <p class="empty-title">No visit records found</p>
+        <p class="text-muted">
+          {% if request.GET.facility or request.GET.from_date %}
+            No visits match the current filter.
+            <a href="{% url 'doctor_patient_history' %}?patient={{ patient.id }}">Clear filters</a>
+          {% else %}
+            This patient has no visits on record yet.
+          {% endif %}
+        </p>
+      </div>
+    {% endif %}
+
+  </div>
+
+  <!-- RIGHT: Sidebar -->
+  <aside class="history-aside">
+
+    <!-- Quick actions -->
+    <div class="card">
+      <p class="card-title">Actions</p>
+      <div class="aside-actions">
+        <a href="{% url 'doctor_consultation' patient.id %}"
+           class="btn btn-primary" style="display:block;text-align:center;width:100%;">
+          Start consultation
+        </a>
+        <a href="{% url 'doctor_referral_form' %}?patient={{ patient.id }}"
+           class="btn btn-secondary" style="display:block;text-align:center;width:100%;margin-top:8px;">
+          Refer patient
+        </a>
+      </div>
+    </div>
+
+    <!-- Chronic conditions / background -->
+    <div class="card">
+      <p class="card-title">Medical background</p>
+      <table class="aside-table">
+        <tr>
+          <td>Allergies</td>
+          <td class="allergy-cell">
+            {{ patient.profile.known_allergies|default:"None recorded" }}
+          </td>
+        </tr>
+        <tr>
+          <td>Blood group</td>
+          <td>{{ patient.profile.blood_group|default:"Unknown" }}</td>
+        </tr>
+        <tr>
+          <td>Chronic conditions</td>
+          <td>{{ patient.profile.chronic_conditions|default:"None recorded" }}</td>
+        </tr>
+        <tr>
+          <td>Current meds</td>
+          <td>{{ patient.profile.current_medications|default:"None" }}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Facilities visited -->
+    <div class="card">
+      <p class="card-title">Facilities visited</p>
+      {% if visited_facilities %}
+        {% for facility in visited_facilities %}
+        <div class="facility-item">
+          <p class="facility-item-name">{{ facility.name }}</p>
+          <p class="facility-item-count text-muted">
+            {{ facility.visit_count }} visit{{ facility.visit_count|pluralize }}
+          </p>
+        </div>
+        {% if not forloop.last %}<hr class="item-divider">{% endif %}
+        {% endfor %}
+      {% else %}
+        <p class="text-muted">No facility visits on record.</p>
+      {% endif %}
+    </div>
+
+  </aside>
+
+</div>
+
+{% endif %}
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  /* Search card */
+  .search-card { margin-bottom: 20px; padding: 16px 20px; }
+
+  .search-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: Georgia, serif;
+    color: var(--gray-700);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(26,92,168,0.12);
+  }
+
+  .search-results-list {
+    margin-top: 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .search-result-item {
+    display: block;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--gray-200);
+    text-decoration: none;
+    transition: background 0.1s;
+  }
+
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: var(--blue-light); text-decoration: none; }
+
+  .result-name {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 14px;
+  }
+
+  .result-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    margin-top: 2px;
+  }
+
+  /* Patient strip */
+  .patient-strip {
+    margin-bottom: 20px;
+    padding: 18px 24px;
+  }
+
+  .patient-strip-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px 24px;
+    margin-bottom: 12px;
+  }
+
+  .strip-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    margin-bottom: 2px;
+  }
+
+  .strip-value {
+    font-size: 14px;
+    color: var(--gray-700);
+    font-family: Georgia, serif;
+  }
+
+  .allergy-strip {
+    padding-top: 12px;
+    border-top: 1px solid var(--gray-200);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+  }
+
+  .allergy-strip-label {
+    font-weight: bold;
+    color: var(--red);
+    margin-right: 6px;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+
+  .allergy-strip-value {
+    color: var(--red);
+    font-weight: bold;
+  }
+
+  /* History layout */
+  .history-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .history-main { min-width: 0; }
+
+  /* Filter bar */
+  .filter-bar { padding: 14px 18px; margin-bottom: 16px; }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 130px;
+  }
+
+  .filter-grow { flex: 1; }
+
+  .filter-group label { font-size: 10px; margin-bottom: 0; }
+  .filter-group select, .filter-group input { font-size: 13px; padding: 7px 10px; }
+
+  .filter-actions { display: flex; gap: 8px; padding-bottom: 1px; }
+
+  /* Visit records */
+  .visit-record {
+    margin-bottom: 16px;
+    padding: 18px 20px;
+  }
+
+  .visit-record-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    gap: 12px;
+  }
+
+  .visit-record-date {
+    font-size: 14px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 3px;
+  }
+
+  .visit-record-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  .visit-record-badges { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* Visit sections */
+  .visit-section {
+    padding: 10px 0;
+    border-top: 1px solid var(--gray-200);
+  }
+
+  .visit-section-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    margin-bottom: 6px;
+  }
+
+  /* Vitals */
+  .vitals-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .vital-pill {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-700);
+  }
+
+  /* Diagnosis */
+  .diagnosis-text {
+    font-size: 15px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 4px;
+  }
+
+  .icd-code {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    font-weight: normal;
+    margin-left: 4px;
+  }
+
+  .findings-text {
+    font-size: 13px;
+    color: var(--gray-700);
+    line-height: 1.5;
+    font-family: Arial, sans-serif;
+  }
+
+  /* Drugs */
+  .drug-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .drug-pill {
+    background: var(--blue-light);
+    border: 1px solid var(--gray-200);
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--blue-dark);
+  }
+
+  /* Lab results compact table */
+  .compact-table { font-size: 12px; }
+  .compact-table thead th { font-size: 10px; padding: 6px 10px; }
+  .compact-table tbody td { padding: 6px 10px; }
+
+  /* Referral */
+  .referral-section { border-left: 2px solid var(--blue); padding-left: 12px; }
+  .referral-text { font-size: 13px; color: var(--gray-700); font-family: Arial, sans-serif; }
+
+  /* Visit footer (cost) */
+  .visit-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--gray-200);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+  }
+
+  .cost-label { color: var(--gray-500); }
+  .cost-value { font-weight: bold; color: var(--blue-dark); font-family: Georgia, serif; }
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px 0;
+  }
+
+  .pagination-info {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  /* Empty state */
+  .empty-state { padding: 40px 20px; text-align: center; }
+  .empty-title { font-size: 15px; font-family: Georgia, serif; color: var(--gray-700); margin-bottom: 8px; }
+
+  /* Aside */
+  .aside-actions { margin-bottom: 4px; }
+
+  .aside-table {
+    width: 100%;
+    font-size: 12px;
+    border-collapse: collapse;
+    font-family: Arial, sans-serif;
+  }
+
+  .aside-table td {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    vertical-align: top;
+  }
+
+  .aside-table td:first-child {
+    color: var(--gray-500);
+    width: 90px;
+    padding-right: 8px;
+    flex-shrink: 0;
+  }
+
+  .aside-table tr:last-child td { border-bottom: none; }
+  .allergy-cell { color: var(--red); font-weight: bold; }
+
+  .facility-item { padding: 8px 0; }
+
+  .facility-item-name {
+    font-size: 13px;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+    font-weight: bold;
+  }
+
+  .facility-item-count { font-size: 11px; margin-top: 2px; }
+
+  .item-divider {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 2px 0;
+  }
+
+  @media (max-width: 960px) {
+    .history-layout { grid-template-columns: 1fr; }
+    .history-aside { order: -1; }
+    .patient-strip-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 600px) {
+    .patient-strip-grid { grid-template-columns: 1fr 1fr; }
+    .filter-row { flex-direction: column; }
+    .filter-group { min-width: 100%; }
+    .search-row { flex-direction: column; }
+    .visit-record-head { flex-direction: column; gap: 6px; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}

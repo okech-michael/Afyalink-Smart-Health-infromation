@@ -1,0 +1,588 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Doctor Dashboard — AfyaLink{% endblock %}
+
+{% block nav_doctor_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Dr. {{ request.user.get_full_name }}</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <div class="flex gap-8">
+    {% if emergency_alarms %}
+      <span class="emergency-badge">{{ emergency_alarms|length }} emergency alarm{{ emergency_alarms|length|pluralize }}</span>
+    {% endif %}
+    <a href="{% url 'doctor_patient_history' %}" class="btn btn-secondary">Search patient</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── EMERGENCY ALARMS — shown at very top if any active ── -->
+{% if emergency_alarms %}
+<div class="emergency-banner">
+  <p class="emergency-banner-title">Active emergency alarms</p>
+  {% for alarm in emergency_alarms %}
+  <div class="emergency-alarm-row">
+    <div class="alarm-info">
+      <span class="alarm-name">{{ alarm.patient.get_full_name }}</span>
+      <span class="alarm-type">{{ alarm.get_condition_type_display }}</span>
+      <span class="alarm-severity severity-{{ alarm.severity }}">{{ alarm.severity|upper }}</span>
+      <span class="alarm-location">{{ alarm.location_description|truncatechars:60 }}</span>
+    </div>
+    <div class="alarm-actions">
+      <span class="text-muted" style="font-size:12px;">{{ alarm.created_at|timesince }} ago</span>
+      <a href="tel:{{ alarm.contact_number }}" class="btn btn-danger btn-sm">Call {{ alarm.contact_number }}</a>
+      <a href="{% url 'doctor_consultation' alarm.patient.id %}" class="btn btn-secondary btn-sm">Open record</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+
+<!-- ── STAT ROW ── -->
+<div class="stat-grid">
+
+  <div class="stat-card">
+    <p class="stat-label">Waiting — triage done</p>
+    <p class="stat-value">{{ queue_count|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card amber">
+    <p class="stat-label">Pre-arrival symptoms</p>
+    <p class="stat-value">{{ pre_arrival_count|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card green">
+    <p class="stat-label">Seen today</p>
+    <p class="stat-value">{{ seen_today|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card">
+    <p class="stat-label">Pending lab results</p>
+    <p class="stat-value">{{ pending_labs|default:"0" }}</p>
+  </div>
+
+</div>
+
+
+<!-- ── MAIN GRID: Queue + Pre-arrival ── -->
+<div class="doctor-grid">
+
+  <!-- LEFT: Patient queue -->
+  <div class="card queue-card">
+    <div class="flex-between mb-16">
+      <p class="card-title" style="margin-bottom:0;border:none;padding:0;">
+        Patient queue
+        <span class="record-count">{{ queue|length }} waiting</span>
+      </p>
+      <div class="queue-filter">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="high">High priority</button>
+        <button class="filter-btn" data-filter="pre-arrival">Pre-arrival</button>
+      </div>
+    </div>
+
+    {% if queue %}
+      <div class="patient-queue" id="patient-queue">
+        {% for item in queue %}
+        <div class="queue-item priority-border-{{ item.vitals.priority|default:'low' }}"
+             data-priority="{{ item.vitals.priority|default:'low' }}"
+             data-pre-arrival="{% if item.symptom_entry %}true{% else %}false{% endif %}">
+
+          <div class="queue-item-top">
+            <div class="queue-patient-info">
+              <p class="queue-patient-name">{{ item.patient.get_full_name }}</p>
+              <p class="queue-patient-meta">
+                {{ item.patient.profile.age|default:"Age unknown" }}
+                &mdash; {{ item.patient.profile.gender|title|default:"" }}
+                &mdash; Check-in: {{ item.check_in_time|time:"H:i" }}
+              </p>
+            </div>
+            <div class="queue-badges">
+              <span class="badge
+                {% if item.vitals.priority == 'high' %}badge-red
+                {% elif item.vitals.priority == 'medium' %}badge-amber
+                {% else %}badge-green{% endif %}">
+                {{ item.vitals.priority|title|default:"Low" }}
+              </span>
+              {% if item.symptom_entry %}
+                <span class="badge badge-blue">Pre-arrival</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Vitals strip -->
+          {% if item.vitals %}
+          <div class="vitals-strip">
+            <span class="vital-chip">BP: {{ item.vitals.blood_pressure|default:"—" }}</span>
+            <span class="vital-chip">Temp: {{ item.vitals.temperature|default:"—" }}&deg;C</span>
+            <span class="vital-chip">Pulse: {{ item.vitals.pulse|default:"—" }} bpm</span>
+            <span class="vital-chip">O2: {{ item.vitals.oxygen_saturation|default:"—" }}%</span>
+            <span class="vital-chip">Wt: {{ item.vitals.weight|default:"—" }} kg</span>
+          </div>
+          {% endif %}
+
+          <!-- Pre-arrival symptom preview -->
+          {% if item.symptom_entry %}
+          <div class="symptom-preview">
+            <span class="symptom-preview-label">Reported from home:</span>
+            <span class="symptom-preview-area">{{ item.symptom_entry.body_part|title }}</span>
+            &mdash;
+            <span class="symptom-preview-text">{{ item.symptom_entry.symptoms|truncatechars:100 }}</span>
+            {% if item.symptom_entry.known_allergies %}
+              <span class="allergy-flag">Allergy: {{ item.symptom_entry.known_allergies }}</span>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <div class="queue-item-actions">
+            <a href="{% url 'doctor_consultation' item.patient.id %}" class="btn btn-primary btn-sm">
+              Start consultation
+            </a>
+            <a href="{% url 'doctor_patient_history' %}?patient={{ item.patient.id }}" class="btn btn-secondary btn-sm">
+              Full history
+            </a>
+          </div>
+
+        </div>
+        {% endfor %}
+      </div>
+
+    {% else %}
+      <div class="empty-queue">
+        <p class="empty-title">No patients in queue</p>
+        <p class="text-muted">Patients will appear here after triage is completed by the nurse.</p>
+      </div>
+    {% endif %}
+
+  </div>
+
+  <!-- RIGHT: Pre-arrival + Pending labs -->
+  <div class="doctor-right-col">
+
+    <!-- Pre-arrival symptom alerts -->
+    <div class="card">
+      <p class="card-title">Pre-arrival symptom alerts</p>
+      <p class="text-muted" style="font-size:12px;margin-bottom:12px;">
+        Patients who submitted symptoms before leaving home today.
+      </p>
+
+      {% if pre_arrival_entries %}
+        {% for entry in pre_arrival_entries %}
+        <div class="pre-arrival-item">
+          <div class="flex-between">
+            <p class="pre-arrival-name">{{ entry.patient.get_full_name }}</p>
+            <span class="badge
+              {% if entry.severity == 'critical' %}badge-red
+              {% elif entry.severity == 'severe' %}badge-amber
+              {% elif entry.severity == 'moderate' %}badge-blue
+              {% else %}badge-gray{% endif %}">
+              {{ entry.severity|title }}
+            </span>
+          </div>
+          <p class="pre-arrival-detail">
+            {{ entry.body_part|title }} &mdash; {{ entry.duration_value }} {{ entry.duration_unit }}
+          </p>
+          <p class="pre-arrival-text">{{ entry.symptoms|truncatechars:90 }}</p>
+          {% if entry.known_allergies %}
+            <p class="pre-arrival-allergy">Allergy: {{ entry.known_allergies }}</p>
+          {% endif %}
+          <p class="pre-arrival-time text-muted">Submitted {{ entry.created_at|timesince }} ago</p>
+        </div>
+        {% if not forloop.last %}<hr class="item-divider">{% endif %}
+        {% endfor %}
+      {% else %}
+        <p class="text-muted">No pre-arrival symptoms submitted for today.</p>
+      {% endif %}
+    </div>
+
+    <!-- Pending lab results -->
+    <div class="card">
+      <p class="card-title">Pending lab results</p>
+
+      {% if pending_lab_results %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Test</th>
+                <th>Ordered</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for result in pending_lab_results %}
+              <tr>
+                <td>{{ result.visit.patient.get_full_name }}</td>
+                <td>{{ result.test_name }}</td>
+                <td>{{ result.date_ordered|date:"j M, H:i" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted">No pending lab results.</p>
+      {% endif %}
+    </div>
+
+    <!-- Patients seen today -->
+    <div class="card">
+      <p class="card-title">Seen today</p>
+
+      {% if seen_today_list %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Diagnosis</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for visit in seen_today_list %}
+              <tr>
+                <td>{{ visit.patient.get_full_name }}</td>
+                <td>{{ visit.consultation.diagnosis|default:"In progress"|truncatechars:30 }}</td>
+                <td>{{ visit.check_out_time|time:"H:i"|default:"—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted">No completed consultations yet today.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  /* Emergency banner */
+  .emergency-banner {
+    background: var(--red-light);
+    border: 2px solid var(--red);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+
+  .emergency-banner-title {
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--red);
+    margin-bottom: 12px;
+  }
+
+  .emergency-alarm-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(185,28,28,0.2);
+    flex-wrap: wrap;
+  }
+
+  .alarm-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+  }
+
+  .alarm-name { font-weight: bold; color: var(--red); }
+  .alarm-type { color: var(--gray-700); }
+  .alarm-severity { font-weight: bold; font-size: 11px; }
+  .alarm-severity.severity-critical { color: var(--red); }
+  .alarm-severity.severity-serious  { color: #d97706; }
+  .alarm-location { color: var(--gray-500); font-style: italic; font-size: 12px; }
+
+  .alarm-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .emergency-badge {
+    background: var(--red);
+    color: var(--white);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+  }
+
+  /* Doctor two-column layout */
+  .doctor-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .doctor-right-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* Queue card */
+  .queue-card { padding-bottom: 8px; }
+
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  /* Queue filter buttons */
+  .queue-filter {
+    display: flex;
+    gap: 4px;
+  }
+
+  .filter-btn {
+    background: none;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    padding: 4px 10px;
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    cursor: pointer;
+    color: var(--gray-500);
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .filter-btn:hover { background: var(--gray-100); color: var(--gray-700); }
+
+  .filter-btn.active {
+    background: var(--blue);
+    color: var(--white);
+    border-color: var(--blue);
+  }
+
+  /* Queue items */
+  .patient-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .queue-item {
+    border: 1px solid var(--gray-200);
+    border-left: 4px solid var(--gray-300);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    background: var(--white);
+    transition: border-color 0.1s;
+  }
+
+  .queue-item:hover { border-color: var(--blue); }
+
+  .priority-border-high   { border-left-color: var(--red); }
+  .priority-border-medium { border-left-color: #d97706; }
+  .priority-border-low    { border-left-color: var(--green); }
+
+  .queue-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+
+  .queue-patient-name {
+    font-size: 14px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 3px;
+  }
+
+  .queue-patient-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  .queue-badges {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  /* Vitals strip */
+  .vitals-strip {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .vital-chip {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-700);
+  }
+
+  /* Pre-arrival symptom preview inside queue item */
+  .symptom-preview {
+    background: var(--blue-light);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-700);
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  .symptom-preview-label {
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-right: 4px;
+  }
+
+  .symptom-preview-area {
+    font-weight: bold;
+    color: var(--blue);
+  }
+
+  .allergy-flag {
+    display: inline-block;
+    margin-left: 8px;
+    color: var(--red);
+    font-weight: bold;
+  }
+
+  .queue-item-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  /* Empty queue */
+  .empty-queue {
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .empty-title {
+    font-size: 15px;
+    font-family: Georgia, serif;
+    color: var(--gray-700);
+    margin-bottom: 6px;
+  }
+
+  /* Pre-arrival items in right col */
+  .pre-arrival-item {
+    padding: 10px 0;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+  }
+
+  .pre-arrival-name {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .pre-arrival-detail {
+    font-size: 11px;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 3px 0;
+  }
+
+  .pre-arrival-text {
+    color: var(--gray-700);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .pre-arrival-allergy {
+    color: var(--red);
+    font-weight: bold;
+    font-size: 12px;
+    margin-top: 3px;
+  }
+
+  .pre-arrival-time {
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  .item-divider {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 4px 0;
+  }
+
+  @media (max-width: 1000px) {
+    .doctor-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 600px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .queue-item-top { flex-direction: column; }
+    .alarm-actions { width: 100%; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  // Queue filter buttons
+  document.querySelectorAll('.filter-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.filter-btn').forEach(function (b) {
+        b.classList.remove('active');
+      });
+      this.classList.add('active');
+
+      var filter = this.getAttribute('data-filter');
+      document.querySelectorAll('.queue-item').forEach(function (item) {
+        if (filter === 'all') {
+          item.style.display = '';
+        } else if (filter === 'high') {
+          item.style.display = item.getAttribute('data-priority') === 'high' ? '' : 'none';
+        } else if (filter === 'pre-arrival') {
+          item.style.display = item.getAttribute('data-pre-arrival') === 'true' ? '' : 'none';
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

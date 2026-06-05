@@ -1,0 +1,864 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Refer Patient — AfyaLink{% endblock %}
+
+{% block nav_referral %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Refer patient</h1>
+    <p>Transfer a patient's full record to another facility. No paper needed.</p>
+  </div>
+  <a href="{% url 'doctor_dashboard' %}" class="btn btn-secondary">Back to queue</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if referral_sent %}
+<!-- ── CONFIRMATION ── -->
+<div class="confirm-box">
+  <div class="confirm-icon">&#10003;</div>
+  <h2>Referral sent successfully</h2>
+  <p>
+    <strong>{{ referral.patient.get_full_name }}</strong> has been referred to
+    <strong>{{ referral.referred_to.name }}</strong>.
+  </p>
+  <p class="mt-8">
+    The receiving facility can see the patient's full record immediately.
+    Reference: <strong>#{{ referral.id }}</strong>
+  </p>
+  <div class="confirm-summary">
+    <div class="confirm-row">
+      <span class="confirm-label">Patient</span>
+      <span>{{ referral.patient.get_full_name }}</span>
+    </div>
+    <div class="confirm-row">
+      <span class="confirm-label">From</span>
+      <span>{{ referral.from_facility.name }}</span>
+    </div>
+    <div class="confirm-row">
+      <span class="confirm-label">To</span>
+      <span>{{ referral.referred_to.name }} — Level {{ referral.referred_to.level }}</span>
+    </div>
+    <div class="confirm-row">
+      <span class="confirm-label">Urgency</span>
+      <span>{{ referral.get_urgency_display }}</span>
+    </div>
+    <div class="confirm-row">
+      <span class="confirm-label">Date</span>
+      <span>{{ referral.date|date:"j F Y, H:i" }}</span>
+    </div>
+  </div>
+  <div class="confirm-actions">
+    <a href="{% url 'doctor_dashboard' %}" class="btn btn-secondary">Back to queue</a>
+    <a href="{% url 'doctor_referral_form' %}" class="btn btn-primary">Refer another patient</a>
+  </div>
+</div>
+
+{% else %}
+<!-- ── REFERRAL FORM ── -->
+
+<div class="referral-layout">
+<div class="referral-main">
+
+  <form method="POST" action="{% url 'doctor_referral_form' %}">
+    {% csrf_token %}
+
+    <!-- STEP 1: Select patient -->
+    <div class="card">
+      <p class="card-title">Step 1 &mdash; Select patient</p>
+
+      {% if preselected_patient %}
+        <!-- Patient pre-filled from URL param -->
+        <input type="hidden" name="patient_id" value="{{ preselected_patient.id }}" />
+        <div class="selected-patient-box">
+          <p class="selected-label">Patient selected</p>
+          <p class="selected-name">{{ preselected_patient.get_full_name }}</p>
+          <p class="selected-meta">
+            {{ preselected_patient.profile.age|default:"Age unknown" }},
+            {{ preselected_patient.profile.gender|title|default:"" }}
+            &mdash; {{ preselected_patient.profile.phone_number|default:"No phone" }}
+            &mdash; {{ preselected_patient.profile.facility.name }}
+          </p>
+          {% if preselected_patient.profile.known_allergies %}
+            <p class="selected-allergy">
+              Allergy: {{ preselected_patient.profile.known_allergies }}
+            </p>
+          {% endif %}
+          <a href="{% url 'doctor_referral_form' %}" class="btn btn-secondary btn-sm mt-8"
+             style="display:inline-block;">
+            Change patient
+          </a>
+        </div>
+
+      {% else %}
+        <!-- Search -->
+        <div class="search-row">
+          <input
+            type="text"
+            id="patient-search"
+            placeholder="Search by name or phone number"
+            class="search-input"
+            autocomplete="off"
+          />
+          <button type="button" class="btn btn-secondary" id="search-btn">Search</button>
+        </div>
+        <div id="search-results" style="display:none;"></div>
+        <div id="selected-patient-display" style="display:none;">
+          <div class="selected-patient-box">
+            <p class="selected-label">Patient selected</p>
+            <p class="selected-name" id="sel-name"></p>
+            <p class="selected-meta" id="sel-meta"></p>
+            <button type="button" class="btn btn-secondary btn-sm mt-8"
+                    id="clear-patient-btn">Change</button>
+          </div>
+        </div>
+        <input type="hidden" name="patient_id" id="patient_id_input" value="" />
+        <p class="form-hint mt-8">Only patients registered at your facility are shown.</p>
+
+      {% endif %}
+
+      {% if form.patient_id.errors %}
+        <p class="form-error">{{ form.patient_id.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+
+
+    <!-- STEP 2: Current visit summary (auto-loads if active visit) -->
+    {% if active_visit %}
+    <div class="card ref-card">
+      <p class="card-title">
+        Current visit summary
+        <span class="card-title-sub">Visit #{{ active_visit.id }} — {{ active_visit.date|date:"j F Y" }}</span>
+      </p>
+      <div class="ref-grid">
+        {% if active_visit.consultation %}
+        <div class="ref-item ref-full">
+          <p class="ref-label">Diagnosis</p>
+          <p class="ref-value diagnosis-text">
+            {{ active_visit.consultation.diagnosis|default:"Not yet recorded" }}
+          </p>
+        </div>
+        <div class="ref-item ref-full">
+          <p class="ref-label">Treatment given</p>
+          <p class="ref-value">{{ active_visit.consultation.treatment_plan|default:"—" }}</p>
+        </div>
+        {% endif %}
+        {% if active_visit.vitals %}
+        <div class="ref-item">
+          <p class="ref-label">Last BP</p>
+          <p class="ref-value">{{ active_visit.vitals.blood_pressure|default:"—" }} mmHg</p>
+        </div>
+        <div class="ref-item">
+          <p class="ref-label">Temp</p>
+          <p class="ref-value">{{ active_visit.vitals.temperature|default:"—" }}&deg;C</p>
+        </div>
+        <div class="ref-item">
+          <p class="ref-label">Pulse</p>
+          <p class="ref-value">{{ active_visit.vitals.pulse|default:"—" }} bpm</p>
+        </div>
+        <div class="ref-item">
+          <p class="ref-label">O2 sat.</p>
+          <p class="ref-value">{{ active_visit.vitals.oxygen_saturation|default:"—" }}%</p>
+        </div>
+        {% endif %}
+        {% if active_visit.prescriptions.exists %}
+        <div class="ref-item ref-full">
+          <p class="ref-label">Drugs given</p>
+          <div class="drug-list">
+            {% for rx in active_visit.prescriptions.all %}
+              <span class="drug-pill">{{ rx.drug_name }} {{ rx.dosage }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      <input type="hidden" name="visit_id" value="{{ active_visit.id }}" />
+      <p class="form-hint mt-8">
+        This visit record will be sent to the receiving facility automatically.
+      </p>
+    </div>
+    {% endif %}
+
+
+    <!-- STEP 3: Referral details -->
+    <div class="card" id="referral-details-card">
+      <p class="card-title">Step 2 &mdash; Referral details</p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="referred_to">Receiving facility</label>
+          <select id="referred_to" name="referred_to" required>
+            <option value="" disabled selected>-- Select destination --</option>
+            {% for level, label in facility_levels %}
+              <optgroup label="{{ label }}">
+                {% for facility in facilities_by_level|get_item:level %}
+                  <option value="{{ facility.id }}"
+                    {% if form.referred_to.value == facility.id|stringformat:"s" %}selected{% endif %}>
+                    {{ facility.name }}
+                  </option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+          <p class="form-hint">
+            Your facility is excluded. Facilities are grouped by level.
+          </p>
+          {% if form.referred_to.errors %}
+            <p class="form-error">{{ form.referred_to.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          <label for="urgency">Urgency</label>
+          <select id="urgency" name="urgency" required>
+            <option value="routine"   {% if form.urgency.value == 'routine' or not form.urgency.value %}selected{% endif %}>
+              Routine — within a few days
+            </option>
+            <option value="urgent"    {% if form.urgency.value == 'urgent' %}selected{% endif %}>
+              Urgent — today
+            </option>
+            <option value="emergency" {% if form.urgency.value == 'emergency' %}selected{% endif %}>
+              Emergency — immediate transfer
+            </option>
+          </select>
+          {% if form.urgency.errors %}
+            <p class="form-error">{{ form.urgency.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="reason">Clinical reason for referral</label>
+        <textarea
+          id="reason"
+          name="reason"
+          rows="4"
+          placeholder="e.g. Patient requires specialist review for suspected cardiac condition. Echocardiogram and cardiology consult needed. Managed here with Furosemide and oxygen. Stable but requires Level 5 care."
+          required
+        >{{ form.reason.value|default:'' }}</textarea>
+        <p class="form-hint">
+          This note will be the first thing the receiving doctor reads. Be specific.
+        </p>
+        {% if form.reason.errors %}
+          <p class="form-error">{{ form.reason.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="specialist_needed">Specialist needed</label>
+          <select id="specialist_needed" name="specialist_needed">
+            <option value="">Not specified</option>
+            <option value="cardiologist"    {% if form.specialist_needed.value == 'cardiologist' %}selected{% endif %}>Cardiologist</option>
+            <option value="surgeon"         {% if form.specialist_needed.value == 'surgeon' %}selected{% endif %}>Surgeon</option>
+            <option value="gynaecologist"   {% if form.specialist_needed.value == 'gynaecologist' %}selected{% endif %}>Gynaecologist</option>
+            <option value="paediatrician"   {% if form.specialist_needed.value == 'paediatrician' %}selected{% endif %}>Paediatrician</option>
+            <option value="neurologist"     {% if form.specialist_needed.value == 'neurologist' %}selected{% endif %}>Neurologist</option>
+            <option value="orthopaedic"     {% if form.specialist_needed.value == 'orthopaedic' %}selected{% endif %}>Orthopaedic surgeon</option>
+            <option value="psychiatrist"    {% if form.specialist_needed.value == 'psychiatrist' %}selected{% endif %}>Psychiatrist</option>
+            <option value="oncologist"      {% if form.specialist_needed.value == 'oncologist' %}selected{% endif %}>Oncologist</option>
+            <option value="ophthalmologist" {% if form.specialist_needed.value == 'ophthalmologist' %}selected{% endif %}>Ophthalmologist</option>
+            <option value="other"           {% if form.specialist_needed.value == 'other' %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="transport_mode">Transport</label>
+          <select id="transport_mode" name="transport_mode">
+            <option value="own"       {% if form.transport_mode.value == 'own' or not form.transport_mode.value %}selected{% endif %}>
+              Own means
+            </option>
+            <option value="ambulance" {% if form.transport_mode.value == 'ambulance' %}selected{% endif %}>
+              Ambulance
+            </option>
+            <option value="facility"  {% if form.transport_mode.value == 'facility' %}selected{% endif %}>
+              Facility vehicle
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="accompanying_staff">Accompanying staff (if any)</label>
+        <input
+          type="text"
+          id="accompanying_staff"
+          name="accompanying_staff"
+          value="{{ form.accompanying_staff.value|default:'' }}"
+          placeholder="e.g. Nurse Akinyi — will escort patient to Kisii Teaching Hospital"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="referring_doctor_notes">Additional notes for receiving team</label>
+        <textarea
+          id="referring_doctor_notes"
+          name="referring_doctor_notes"
+          rows="2"
+          placeholder="Anything else the receiving team should know immediately on arrival..."
+        >{{ form.referring_doctor_notes.value|default:'' }}</textarea>
+      </div>
+
+    </div>
+
+
+    <!-- STEP 3: What gets sent -->
+    <div class="card records-card">
+      <p class="card-title">Step 3 &mdash; Records being transferred</p>
+      <p class="text-muted" style="font-size:13px;margin-bottom:14px;">
+        The following patient data will be made visible to the receiving facility immediately
+        on submission. You do not need to print or carry anything.
+      </p>
+      <div class="transfer-checklist">
+        <div class="transfer-item transfer-item-yes">Full patient profile &amp; demographics</div>
+        <div class="transfer-item transfer-item-yes">All previous visit records across all facilities</div>
+        <div class="transfer-item transfer-item-yes">Known allergies &amp; chronic conditions</div>
+        <div class="transfer-item transfer-item-yes">Current visit diagnosis &amp; treatment plan</div>
+        <div class="transfer-item transfer-item-yes">Triage vitals from today</div>
+        <div class="transfer-item transfer-item-yes">All prescriptions given today</div>
+        <div class="transfer-item transfer-item-yes">Lab results (pending and completed)</div>
+        <div class="transfer-item transfer-item-yes">Your referral note</div>
+      </div>
+    </div>
+
+    {% if form.non_field_errors %}
+      <p class="form-error">{{ form.non_field_errors|join:", " }}</p>
+    {% endif %}
+
+    <div class="form-actions">
+      <a href="{% url 'doctor_dashboard' %}" class="btn btn-secondary">Cancel</a>
+      <button type="submit" class="btn btn-primary">Send referral</button>
+    </div>
+
+  </form>
+
+</div>
+
+
+<!-- ── RIGHT: Info sidebar ── -->
+<aside class="referral-aside">
+
+  <div class="info-box">
+    <p class="info-box-title">How referrals work</p>
+    <ol class="info-steps">
+      <li>Submit this form. The patient record is instantly visible at the receiving facility.</li>
+      <li>The receiving reception desk sees the referral in their incoming queue.</li>
+      <li>The receiving doctor opens the consultation with the patient's full history already loaded.</li>
+      <li>No paper, no repeat registration, no lost records.</li>
+    </ol>
+  </div>
+
+  <!-- Facility level guide -->
+  <div class="info-box">
+    <p class="info-box-title">Facility levels guide</p>
+    <table class="level-table">
+      <tr>
+        <td><span class="level-badge">L2</span></td>
+        <td>Dispensary — basic outpatient</td>
+      </tr>
+      <tr>
+        <td><span class="level-badge">L3</span></td>
+        <td>Health centre — maternity, minor surgery</td>
+      </tr>
+      <tr>
+        <td><span class="level-badge">L4</span></td>
+        <td>Sub-county hospital — inpatient, lab, pharmacy</td>
+      </tr>
+      <tr>
+        <td><span class="level-badge">L5</span></td>
+        <td>County hospital — specialists, ICU</td>
+      </tr>
+      <tr>
+        <td><span class="level-badge">L6</span></td>
+        <td>Referral hospital — complex surgery, oncology</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Recent referrals from this doctor -->
+  <div class="info-box">
+    <p class="info-box-title">Your recent referrals</p>
+    {% if recent_referrals %}
+      {% for ref in recent_referrals %}
+      <div class="recent-ref-item">
+        <p class="recent-ref-name">{{ ref.patient.get_full_name }}</p>
+        <p class="recent-ref-detail text-muted">
+          To: {{ ref.referred_to.name }}<br>
+          {{ ref.date|date:"j M Y" }} &mdash;
+          <span class="badge
+            {% if ref.status == 'received' %}badge-green
+            {% else %}badge-amber{% endif %}">
+            {{ ref.get_status_display }}
+          </span>
+        </p>
+      </div>
+      {% if not forloop.last %}<hr class="item-divider">{% endif %}
+      {% endfor %}
+    {% else %}
+      <p class="text-muted" style="font-size:12px;">No referrals sent yet.</p>
+    {% endif %}
+  </div>
+
+</aside>
+
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .referral-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .referral-main { min-width: 0; }
+
+  /* Search */
+  .search-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: Georgia, serif;
+    color: var(--gray-700);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(26,92,168,0.12);
+  }
+
+  #search-results {
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .search-result-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    transition: background 0.1s;
+  }
+
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: var(--blue-light); }
+
+  .result-name {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+
+  .result-meta { color: var(--gray-500); font-size: 12px; }
+
+  .no-results {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  /* Selected patient box */
+  .selected-patient-box {
+    background: var(--green-light);
+    border: 1px solid var(--green);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 8px;
+  }
+
+  .selected-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+
+  .selected-name {
+    font-size: 16px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 3px;
+  }
+
+  .selected-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  .selected-allergy {
+    color: var(--red);
+    font-weight: bold;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    margin-top: 6px;
+  }
+
+  /* Reference card */
+  .ref-card { border-left: 3px solid var(--blue); }
+
+  .ref-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 24px;
+  }
+
+  .ref-item { }
+  .ref-full { grid-column: 1 / -1; }
+
+  .ref-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    margin-bottom: 2px;
+  }
+
+  .ref-value {
+    font-size: 13px;
+    color: var(--gray-700);
+    line-height: 1.5;
+  }
+
+  .diagnosis-text {
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-size: 14px;
+  }
+
+  .drug-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+  .drug-pill {
+    background: var(--blue-light);
+    border: 1px solid var(--gray-200);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--blue-dark);
+  }
+
+  /* Form rows */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-error {
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+  }
+
+  /* Transfer checklist */
+  .records-card { border-left: 3px solid var(--green); }
+
+  .transfer-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .transfer-item {
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    padding: 6px 12px 6px 32px;
+    border-radius: var(--radius);
+    position: relative;
+  }
+
+  .transfer-item-yes {
+    background: var(--green-light);
+    color: var(--green);
+  }
+
+  .transfer-item-yes::before {
+    content: "✓";
+    position: absolute;
+    left: 10px;
+    font-weight: bold;
+  }
+
+  /* Form actions */
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  /* Confirmation box */
+  .confirm-box {
+    max-width: 560px;
+    margin: 40px auto;
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-top: 4px solid var(--blue);
+    border-radius: var(--radius);
+    padding: 36px 36px 28px;
+    text-align: center;
+  }
+
+  .confirm-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--blue-light);
+    color: var(--blue);
+    font-size: 22px;
+    line-height: 48px;
+    text-align: center;
+    margin: 0 auto 16px;
+    border: 2px solid var(--blue);
+  }
+
+  .confirm-box h2 {
+    font-size: 20px;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+    margin-bottom: 12px;
+  }
+
+  .confirm-box p {
+    font-size: 14px;
+    color: var(--gray-700);
+    line-height: 1.6;
+  }
+
+  .confirm-summary {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin: 20px 0;
+    text-align: left;
+  }
+
+  .confirm-row {
+    display: flex;
+    gap: 12px;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+  }
+
+  .confirm-row:last-child { border-bottom: none; }
+
+  .confirm-label {
+    color: var(--gray-500);
+    min-width: 70px;
+    flex-shrink: 0;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 20px;
+  }
+
+  /* Card title sub */
+  .card-title-sub {
+    font-size: 11px;
+    font-weight: normal;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  /* Aside */
+  .info-box {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    font-family: Arial, sans-serif;
+  }
+
+  .info-box-title {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+    margin-bottom: 10px;
+  }
+
+  .info-steps {
+    padding-left: 18px;
+    margin: 0;
+    font-size: 12px;
+    color: var(--gray-700);
+    line-height: 1.6;
+  }
+
+  .info-steps li { margin-bottom: 6px; }
+
+  .level-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .level-table td {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    vertical-align: middle;
+  }
+
+  .level-table tr:last-child td { border-bottom: none; }
+  .level-table td:first-child { width: 36px; }
+
+  .level-badge {
+    display: inline-block;
+    background: var(--blue-light);
+    color: var(--blue-dark);
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: Arial, sans-serif;
+  }
+
+  .recent-ref-item { padding: 8px 0; }
+
+  .recent-ref-name {
+    font-size: 13px;
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+    margin-bottom: 3px;
+  }
+
+  .recent-ref-detail { font-size: 11px; line-height: 1.6; }
+
+  .item-divider {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 2px 0;
+  }
+
+  @media (max-width: 860px) {
+    .referral-layout { grid-template-columns: 1fr; }
+    .referral-aside { order: -1; }
+    .ref-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 560px) {
+    .form-row { grid-template-columns: 1fr; }
+    .form-actions { flex-direction: column; }
+    .form-actions .btn { text-align: center; }
+    .confirm-actions { flex-direction: column; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+
+  // Patient search
+  var searchBtn = document.getElementById('search-btn');
+  if (searchBtn) {
+    searchBtn.addEventListener('click', doSearch);
+    document.getElementById('patient-search').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+    });
+  }
+
+  function doSearch() {
+    var q = document.getElementById('patient-search').value.trim();
+    if (!q) return;
+
+    var box = document.getElementById('search-results');
+    box.style.display = 'block';
+    box.innerHTML = '<div class="no-results">Searching...</div>';
+
+    fetch('/api/patients/search/?q=' + encodeURIComponent(q), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.patients || !data.patients.length) {
+        box.innerHTML = '<div class="no-results">No patients found.</div>';
+        return;
+      }
+      var html = '';
+      data.patients.forEach(function (p) {
+        html +=
+          '<div class="search-result-item" onclick="selectPatient(' +
+          p.id + ',\'' + esc(p.full_name) + '\',\'' + esc(p.meta) + '\')">' +
+          '<p class="result-name">' + esc(p.full_name) + '</p>' +
+          '<p class="result-meta">' + esc(p.meta) + '</p>' +
+          '</div>';
+      });
+      box.innerHTML = html;
+    })
+    .catch(function () {
+      box.innerHTML = '<div class="no-results">Search failed. Try again.</div>';
+    });
+  }
+
+  function selectPatient(id, name, meta) {
+    document.getElementById('patient_id_input').value = id;
+    document.getElementById('sel-name').textContent = name;
+    document.getElementById('sel-meta').textContent = meta;
+    document.getElementById('selected-patient-display').style.display = 'block';
+    document.getElementById('search-results').style.display = 'none';
+    document.getElementById('patient-search').value = '';
+  }
+
+  var clearBtn = document.getElementById('clear-patient-btn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function () {
+      document.getElementById('patient_id_input').value = '';
+      document.getElementById('selected-patient-display').style.display = 'none';
+    });
+  }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+</script>
+{% endblock %}

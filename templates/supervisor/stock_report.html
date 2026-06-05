@@ -1,0 +1,357 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Stock Report — AfyaLink{% endblock %}
+
+{% block nav_stock_report %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Stock report</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <div class="flex gap-8">
+    <a href="{% url 'supervisor_stock_entry' %}" class="btn btn-primary">Log delivery</a>
+    <button onclick="window.print()" class="btn btn-secondary">Print report</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── FILTER BAR ── -->
+<div class="card filter-card">
+  <form method="GET" action="{% url 'supervisor_stock_report' %}">
+    <div class="filter-row">
+
+      <div class="filter-group filter-grow">
+        <label for="drug_filter">Drug name</label>
+        <input
+          type="text"
+          id="drug_filter"
+          name="drug"
+          value="{{ request.GET.drug|default:'' }}"
+          placeholder="Filter by drug name"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label for="category_filter">Category</label>
+        <select id="category_filter" name="category">
+          <option value="">All categories</option>
+          <option value="antibiotic"       {% if request.GET.category == 'antibiotic' %}selected{% endif %}>Antibiotic</option>
+          <option value="analgesic"        {% if request.GET.category == 'analgesic' %}selected{% endif %}>Analgesic</option>
+          <option value="antimalarial"     {% if request.GET.category == 'antimalarial' %}selected{% endif %}>Antimalarial</option>
+          <option value="antiretroviral"   {% if request.GET.category == 'antiretroviral' %}selected{% endif %}>ARV</option>
+          <option value="antihypertensive" {% if request.GET.category == 'antihypertensive' %}selected{% endif %}>Antihypertensive</option>
+          <option value="antidiabetic"     {% if request.GET.category == 'antidiabetic' %}selected{% endif %}>Antidiabetic</option>
+          <option value="vaccine"          {% if request.GET.category == 'vaccine' %}selected{% endif %}>Vaccine</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="status_filter">Status</label>
+        <select id="status_filter" name="status">
+          <option value="">All</option>
+          <option value="available" {% if request.GET.status == 'available' %}selected{% endif %}>Available</option>
+          <option value="low"       {% if request.GET.status == 'low' %}selected{% endif %}>Low stock</option>
+          <option value="out"       {% if request.GET.status == 'out' %}selected{% endif %}>Out of stock</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="from_date">From date</label>
+        <input
+          type="date"
+          id="from_date"
+          name="from_date"
+          value="{{ request.GET.from_date|default:'' }}"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label for="to_date">To date</label>
+        <input
+          type="date"
+          id="to_date"
+          name="to_date"
+          value="{{ request.GET.to_date|default:'' }}"
+        />
+      </div>
+
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        <a href="{% url 'supervisor_stock_report' %}" class="btn btn-secondary btn-sm">Clear</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+
+<!-- ── SUMMARY STATS ── -->
+<div class="stat-grid">
+  <div class="stat-card green">
+    <p class="stat-label">Available</p>
+    <p class="stat-value">{{ summary.available|default:"0" }}</p>
+  </div>
+  <div class="stat-card amber">
+    <p class="stat-label">Low stock</p>
+    <p class="stat-value">{{ summary.low|default:"0" }}</p>
+  </div>
+  <div class="stat-card red">
+    <p class="stat-label">Out of stock</p>
+    <p class="stat-value">{{ summary.out|default:"0" }}</p>
+  </div>
+  <div class="stat-card">
+    <p class="stat-label">Total deliveries (period)</p>
+    <p class="stat-value">{{ summary.total_deliveries|default:"0" }}</p>
+  </div>
+</div>
+
+
+<!-- ── FULL STOCK TABLE ── -->
+<div class="card">
+  <p class="card-title">
+    Stock consumption report
+    <span class="record-count">{{ report_items|length }} drugs</span>
+  </p>
+
+  {% if report_items %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Drug name</th>
+          <th>Category</th>
+          <th>Delivered (period)</th>
+          <th>Dispensed (period)</th>
+          <th>Remaining</th>
+          <th>Unit</th>
+          <th>Threshold</th>
+          <th>Expiry date</th>
+          <th>Days left (est.)</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in report_items %}
+        <tr>
+          <td>
+            <p class="drug-name-cell">{{ item.drug_name }}</p>
+            {% if item.batch_number %}
+              <p class="batch-number text-muted">Batch: {{ item.batch_number }}</p>
+            {% endif %}
+          </td>
+          <td>{{ item.category|default:"—" }}</td>
+          <td>{{ item.quantity_delivered }}</td>
+          <td>{{ item.quantity_dispensed }}</td>
+          <td>
+            <strong class="
+              {% if item.status == 'out' %}text-red
+              {% elif item.status == 'low' %}text-amber
+              {% else %}text-green{% endif %}">
+              {{ item.quantity_remaining }}
+            </strong>
+          </td>
+          <td>{{ item.unit }}</td>
+          <td>{{ item.low_stock_threshold }}</td>
+          <td>
+            {% if item.expiry_date %}
+              {% if item.days_to_expiry <= 30 %}
+                <span class="text-red">{{ item.expiry_date|date:"j M Y" }}</span>
+              {% else %}
+                {{ item.expiry_date|date:"j M Y" }}
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.days_remaining %}
+              {% if item.days_remaining <= 3 %}
+                <span class="text-red font-bold">{{ item.days_remaining }}d</span>
+              {% elif item.days_remaining <= 7 %}
+                <span class="text-amber">{{ item.days_remaining }}d</span>
+              {% else %}
+                {{ item.days_remaining }}d
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge
+              {% if item.status == 'available' %}badge-green
+              {% elif item.status == 'low' %}badge-amber
+              {% else %}badge-red{% endif %}">
+              {{ item.status|title }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+    <div class="empty-state">
+      <p class="empty-title">No records match the filter</p>
+      <p class="text-muted">
+        <a href="{% url 'supervisor_stock_report' %}">Clear filters</a>
+        to see all stock records.
+      </p>
+    </div>
+  {% endif %}
+</div>
+
+
+<!-- ── CONSUMPTION TREND ── -->
+<div class="card">
+  <p class="card-title">Top consumed drugs ({{ period_label|default:"this month" }})</p>
+
+  {% if top_consumed %}
+  <div class="consumption-list">
+    {% for item in top_consumed %}
+    <div class="consumption-row">
+      <div class="consumption-info">
+        <p class="consumption-drug">{{ item.drug_name }}</p>
+        <p class="consumption-meta text-muted">{{ item.category|default:"" }}</p>
+      </div>
+      <div class="consumption-bar-wrap">
+        <div class="consumption-bar"
+             style="width:{{ item.percent|default:'0' }}%"></div>
+      </div>
+      <span class="consumption-qty">{{ item.quantity_dispensed }} {{ item.unit }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="text-muted">No consumption data for this period.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .stat-card.red { border-top-color: var(--red); }
+  .stat-card.red .stat-value { color: var(--red); }
+
+  /* Filter bar */
+  .filter-card { padding: 14px 18px; margin-bottom: 20px; }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 120px;
+  }
+
+  .filter-grow { flex: 1; min-width: 160px; }
+
+  .filter-group label { font-size: 10px; margin-bottom: 0; }
+  .filter-group select, .filter-group input { font-size: 13px; padding: 7px 10px; }
+
+  .filter-actions { display: flex; gap: 8px; padding-bottom: 1px; flex-shrink: 0; }
+
+  /* Table */
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  .drug-name-cell {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .batch-number { font-size: 10px; }
+
+  .text-red   { color: var(--red); }
+  .text-amber { color: #d97706; }
+  .text-green { color: var(--green); }
+  .font-bold  { font-weight: bold; }
+
+  .empty-state { padding: 40px 20px; text-align: center; }
+  .empty-title { font-size: 15px; font-family: Georgia, serif; color: var(--gray-700); margin-bottom: 8px; }
+
+  /* Consumption chart */
+  .consumption-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .consumption-row {
+    display: grid;
+    grid-template-columns: 200px 1fr 80px;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .consumption-drug {
+    font-size: 13px;
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+  }
+
+  .consumption-meta { font-size: 11px; }
+
+  .consumption-bar-wrap {
+    height: 12px;
+    background: var(--gray-200);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .consumption-bar {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 6px;
+    min-width: 4px;
+    transition: width 0.3s;
+  }
+
+  .consumption-qty {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-700);
+    text-align: right;
+  }
+
+  /* Print */
+  @media print {
+    .sidebar, .topbar, .footer, .page-header .btn, .filter-card { display: none !important; }
+    .main-content { padding: 0; }
+    .card { border: 1px solid #ccc; box-shadow: none; }
+    body { background: white; font-size: 12px; }
+  }
+
+  @media (max-width: 900px) {
+    .filter-row { flex-direction: column; }
+    .filter-group, .filter-grow { min-width: 100%; }
+    .filter-actions { width: 100%; }
+    .consumption-row { grid-template-columns: 140px 1fr 60px; gap: 10px; }
+  }
+
+  @media (max-width: 600px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .consumption-row { grid-template-columns: 1fr; gap: 4px; }
+    .consumption-bar-wrap { display: none; }
+  }
+
+</style>
+{% endblock %}

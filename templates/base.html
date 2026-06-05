@@ -1,0 +1,138 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}AfyaLink{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>+</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/main.css' %}?v=20260407" />
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  {% block fullpage %}
+
+  <!-- ── TOPBAR ── -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="/" class="brand">
+        <span class="brand-mark">+</span>
+        <span class="brand-name">AfyaLink</span>
+      </a>
+
+      <nav class="top-nav">
+        {% if user.is_authenticated %}
+          <span class="nav-facility">
+            {{ request.user.profile.facility.name|default:"No facility assigned" }}
+          </span>
+          <span class="nav-divider">|</span>
+          <span class="nav-user">{{ request.user.get_full_name|default:request.user.username }}</span>
+          <span class="nav-role">({{ request.user.profile.role|title }})</span>
+          <a href="{% url 'logout' %}" class="btn btn-outline btn-sm">Log out</a>
+        {% else %}
+          <a href="{% url 'login' %}" class="btn btn-outline btn-sm">Log in</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── MAIN LAYOUT ── -->
+  <div class="layout">
+
+    {% if user.is_authenticated %}
+    <!-- ── SIDEBAR ── -->
+    <aside class="sidebar">
+      <nav class="sidebar-nav">
+
+        {% with role=request.user.profile.role %}
+
+        {% if role == 'patient' %}
+          <p class="nav-section-label">Patient</p>
+          <a href="{% url 'patient_dashboard' %}"        class="nav-link {% block nav_patient_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'patient_symptom_entry' %}"    class="nav-link {% block nav_symptom_entry %}{% endblock %}">Enter symptoms</a>
+          <a href="{% url 'patient_visit_history' %}"    class="nav-link {% block nav_visit_history %}{% endblock %}">Visit history</a>
+          <a href="{% url 'patient_facility_finder' %}"  class="nav-link {% block nav_facility_finder %}{% endblock %}">Find a facility</a>
+          <a href="{% url 'patient_emergency' %}"        class="nav-link nav-link-danger {% block nav_emergency %}{% endblock %}">Emergency alarm</a>
+
+        {% elif role == 'reception' %}
+          <p class="nav-section-label">Reception</p>
+          <a href="{% url 'reception_dashboard' %}"       class="nav-link {% block nav_reception_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'reception_register_visit' %}"  class="nav-link {% block nav_register_visit %}{% endblock %}">Register visit</a>
+
+        {% elif role == 'nurse' %}
+          <p class="nav-section-label">Triage / Nurse</p>
+          <a href="{% url 'nurse_dashboard' %}"      class="nav-link {% block nav_nurse_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'nurse_vitals_entry' %}"   class="nav-link {% block nav_vitals_entry %}{% endblock %}">Record vitals</a>
+
+        {% elif role == 'doctor' %}
+          <p class="nav-section-label">Doctor</p>
+          <a href="{% url 'doctor_dashboard' %}"        class="nav-link {% block nav_doctor_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'doctor_patient_history' %}"  class="nav-link {% block nav_patient_history %}{% endblock %}">Patient history</a>
+          <a href="{% url 'doctor_referral_form' %}"    class="nav-link {% block nav_referral %}{% endblock %}">Refer patient</a>
+
+        {% elif role == 'lab' %}
+          <p class="nav-section-label">Laboratory</p>
+          <a href="{% url 'lab_dashboard' %}"       class="nav-link {% block nav_lab_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'lab_results_entry' %}"   class="nav-link {% block nav_results_entry %}{% endblock %}">Enter results</a>
+
+        {% elif role == 'pharmacy' %}
+          <p class="nav-section-label">Pharmacy</p>
+          <a href="{% url 'pharmacy_dashboard' %}"  class="nav-link {% block nav_pharmacy_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'pharmacy_dispense' %}"   class="nav-link {% block nav_dispense %}{% endblock %}">Dispense drugs</a>
+
+        {% elif role == 'billing' %}
+          <p class="nav-section-label">Billing</p>
+          <a href="{% url 'billing_dashboard' %}"  class="nav-link {% block nav_billing_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'billing_invoice' %}"    class="nav-link {% block nav_invoice %}{% endblock %}">Invoices</a>
+
+        {% elif role == 'supervisor' %}
+          <p class="nav-section-label">Drug Supervisor</p>
+          <a href="{% url 'supervisor_dashboard' %}"    class="nav-link {% block nav_supervisor_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'supervisor_stock_entry' %}"  class="nav-link {% block nav_stock_entry %}{% endblock %}">Log delivery</a>
+          <a href="{% url 'supervisor_stock_report' %}" class="nav-link {% block nav_stock_report %}{% endblock %}">Stock report</a>
+
+        {% elif role == 'admin' %}
+          <p class="nav-section-label">Administration</p>
+          <a href="{% url 'admin_panel_dashboard' %}"           class="nav-link {% block nav_admin_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'admin_panel_manage_facilities' %}"   class="nav-link {% block nav_manage_facilities %}{% endblock %}">Facilities</a>
+
+        {% endif %}
+
+        {% endwith %}
+
+      </nav>
+    </aside>
+    {% endif %}
+
+    <!-- ── PAGE CONTENT ── -->
+    <main class="main-content">
+
+      {% if messages %}
+        <div class="messages">
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% block page_header %}{% endblock %}
+      {% block content %}{% endblock %}
+
+    </main>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <footer class="footer">
+    <p>AfyaLink &copy; {% now "Y" %} &mdash; Kisii University Innovation Week 2026</p>
+  </footer>
+
+  {% endblock %}
+
+  <script src="{% static 'js/main.js' %}"></script>
+  {% block extra_js %}{% endblock %}
+
+</body>
+</html>

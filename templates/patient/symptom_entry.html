@@ -1,0 +1,374 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Enter Symptoms — AfyaLink{% endblock %}
+
+{% block nav_symptom_entry %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Enter symptoms before your visit</h1>
+  <p>Fill this in before you leave home. Your doctor and triage nurse will see it the moment you arrive.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="symptom-layout">
+
+  <!-- ── FORM ── -->
+  <div class="symptom-main">
+
+    <form method="POST" action="{% url 'patient_symptom_entry' %}">
+      {% csrf_token %}
+
+      <!-- SECTION: When are you going -->
+      <div class="card">
+        <p class="card-title">Visit details</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="visit_date">Date of visit</label>
+            <input
+              type="date"
+              id="visit_date"
+              name="visit_date"
+              value="{{ form.visit_date.value|default:today|date:'Y-m-d' }}"
+              required
+            />
+            {% if form.visit_date.errors %}
+              <p class="form-error">{{ form.visit_date.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label for="facility">Facility you are visiting</label>
+            <select id="facility" name="facility" required>
+              <option value="" disabled {% if not form.facility.value %}selected{% endif %}>-- Select facility --</option>
+              {% for facility in facilities %}
+                <option value="{{ facility.id }}"
+                  {% if form.facility.value == facility.id|stringformat:"s" %}selected{% endif %}
+                  {% if facility.id == request.user.profile.facility.id %}selected{% endif %}>
+                  {{ facility.name }}
+                </option>
+              {% endfor %}
+            </select>
+            <p class="form-hint">Defaults to your registered facility.</p>
+            {% if form.facility.errors %}
+              <p class="form-error">{{ form.facility.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SECTION: Main complaint -->
+      <div class="card">
+        <p class="card-title">Main complaint</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="body_part">Affected body part / area</label>
+            <select id="body_part" name="body_part" required>
+              <option value="" disabled {% if not form.body_part.value %}selected{% endif %}>-- Select --</option>
+              <optgroup label="Head and neck">
+                <option value="head"   {% if form.body_part.value == 'head' %}selected{% endif %}>Head</option>
+                <option value="eyes"   {% if form.body_part.value == 'eyes' %}selected{% endif %}>Eyes</option>
+                <option value="ears"   {% if form.body_part.value == 'ears' %}selected{% endif %}>Ears</option>
+                <option value="nose"   {% if form.body_part.value == 'nose' %}selected{% endif %}>Nose</option>
+                <option value="throat" {% if form.body_part.value == 'throat' %}selected{% endif %}>Throat / mouth</option>
+                <option value="neck"   {% if form.body_part.value == 'neck' %}selected{% endif %}>Neck</option>
+              </optgroup>
+              <optgroup label="Chest and abdomen">
+                <option value="chest"  {% if form.body_part.value == 'chest' %}selected{% endif %}>Chest</option>
+                <option value="heart"  {% if form.body_part.value == 'heart' %}selected{% endif %}>Heart / palpitations</option>
+                <option value="lungs"  {% if form.body_part.value == 'lungs' %}selected{% endif %}>Lungs / breathing</option>
+                <option value="abdomen"{% if form.body_part.value == 'abdomen' %}selected{% endif %}>Abdomen / stomach</option>
+              </optgroup>
+              <optgroup label="Lower body">
+                <option value="back"   {% if form.body_part.value == 'back' %}selected{% endif %}>Back</option>
+                <option value="pelvis" {% if form.body_part.value == 'pelvis' %}selected{% endif %}>Pelvis / urinary</option>
+                <option value="legs"   {% if form.body_part.value == 'legs' %}selected{% endif %}>Legs / feet</option>
+                <option value="arms"   {% if form.body_part.value == 'arms' %}selected{% endif %}>Arms / hands</option>
+              </optgroup>
+              <optgroup label="General">
+                <option value="skin"   {% if form.body_part.value == 'skin' %}selected{% endif %}>Skin / rash</option>
+                <option value="general"{% if form.body_part.value == 'general' %}selected{% endif %}>Whole body / general</option>
+                <option value="other"  {% if form.body_part.value == 'other' %}selected{% endif %}>Other</option>
+              </optgroup>
+            </select>
+            {% if form.body_part.errors %}
+              <p class="form-error">{{ form.body_part.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label for="severity">Severity</label>
+            <select id="severity" name="severity" required>
+              <option value="" disabled {% if not form.severity.value %}selected{% endif %}>-- Select --</option>
+              <option value="mild"     {% if form.severity.value == 'mild' %}selected{% endif %}>Mild — manageable, not stopping daily activities</option>
+              <option value="moderate" {% if form.severity.value == 'moderate' %}selected{% endif %}>Moderate — affecting daily activities</option>
+              <option value="severe"   {% if form.severity.value == 'severe' %}selected{% endif %}>Severe — very painful or disabling</option>
+              <option value="critical" {% if form.severity.value == 'critical' %}selected{% endif %}>Critical — I need urgent help</option>
+            </select>
+            {% if form.severity.errors %}
+              <p class="form-error">{{ form.severity.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="symptoms">Describe your symptoms</label>
+          <textarea
+            id="symptoms"
+            name="symptoms"
+            rows="4"
+            placeholder="e.g. I have had a sharp pain in my lower abdomen for 3 days. It gets worse when I move. I also feel nauseous in the morning."
+            required
+          >{{ form.symptoms.value|default:'' }}</textarea>
+          <p class="form-hint">Be as specific as you can. Include when it started, what makes it better or worse.</p>
+          {% if form.symptoms.errors %}
+            <p class="form-error">{{ form.symptoms.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="duration_value">How long have you had this?</label>
+            <input
+              type="number"
+              id="duration_value"
+              name="duration_value"
+              min="1"
+              value="{{ form.duration_value.value|default:'' }}"
+              placeholder="e.g. 3"
+              required
+            />
+            {% if form.duration_value.errors %}
+              <p class="form-error">{{ form.duration_value.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label for="duration_unit">Unit</label>
+            <select id="duration_unit" name="duration_unit" required>
+              <option value="hours"  {% if form.duration_unit.value == 'hours' %}selected{% endif %}>Hours</option>
+              <option value="days"   {% if form.duration_unit.value == 'days' or not form.duration_unit.value %}selected{% endif %}>Days</option>
+              <option value="weeks"  {% if form.duration_unit.value == 'weeks' %}selected{% endif %}>Weeks</option>
+              <option value="months" {% if form.duration_unit.value == 'months' %}selected{% endif %}>Months</option>
+            </select>
+            {% if form.duration_unit.errors %}
+              <p class="form-error">{{ form.duration_unit.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SECTION: Additional info -->
+      <div class="card">
+        <p class="card-title">Additional information</p>
+
+        <div class="form-group">
+          <label for="current_medications">Current medications (if any)</label>
+          <textarea
+            id="current_medications"
+            name="current_medications"
+            rows="2"
+            placeholder="e.g. Metformin 500mg daily, Lisinopril 10mg"
+          >{{ form.current_medications.value|default:'' }}</textarea>
+          {% if form.current_medications.errors %}
+            <p class="form-error">{{ form.current_medications.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="known_allergies">Known allergies</label>
+            <input
+              type="text"
+              id="known_allergies"
+              name="known_allergies"
+              value="{{ form.known_allergies.value|default:'' }}"
+              placeholder="e.g. Penicillin, Sulfa drugs"
+            />
+            {% if form.known_allergies.errors %}
+              <p class="form-error">{{ form.known_allergies.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label for="temperature">Body temperature (if known)</label>
+            <input
+              type="text"
+              id="temperature"
+              name="temperature"
+              value="{{ form.temperature.value|default:'' }}"
+              placeholder="e.g. 38.5 C"
+            />
+            {% if form.temperature.errors %}
+              <p class="form-error">{{ form.temperature.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="extra_notes">Anything else the doctor should know</label>
+          <textarea
+            id="extra_notes"
+            name="extra_notes"
+            rows="2"
+            placeholder="e.g. I am 6 months pregnant. I had a similar episode last year. I cannot walk without pain."
+          >{{ form.extra_notes.value|default:'' }}</textarea>
+          {% if form.extra_notes.errors %}
+            <p class="form-error">{{ form.extra_notes.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+      </div>
+
+      {% if form.non_field_errors %}
+        <p class="form-error">{{ form.non_field_errors|join:", " }}</p>
+      {% endif %}
+
+      <div class="form-actions">
+        <a href="{% url 'patient_dashboard' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Submit symptoms</button>
+      </div>
+
+    </form>
+
+  </div>
+
+  <!-- ── SIDEBAR INFO ── -->
+  <aside class="symptom-aside">
+
+    <div class="info-box">
+      <p class="info-box-title">Why fill this in?</p>
+      <p>When you submit your symptoms before leaving home, your triage nurse and doctor can see them the moment you check in at reception.</p>
+      <p class="mt-8">This means shorter waiting time and faster, more accurate care.</p>
+    </div>
+
+    <div class="info-box info-box-warning">
+      <p class="info-box-title">Is this an emergency?</p>
+      <p>If you are in severe pain, cannot move, or need immediate help, do not fill this form.</p>
+      <a href="{% url 'patient_emergency' %}" class="btn btn-danger btn-sm mt-16" style="display:inline-block">
+        Raise emergency alarm
+      </a>
+    </div>
+
+    <div class="info-box">
+      <p class="info-box-title">Critical symptoms</p>
+      <p>If you select <strong>Critical</strong> severity, an alert will be sent immediately to the on-duty doctor at your chosen facility.</p>
+    </div>
+
+  </aside>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  /* Two-column layout: form + info sidebar */
+  .symptom-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .symptom-main { min-width: 0; }
+
+  /* Form row */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-error {
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+  }
+
+  /* Submit row */
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 8px;
+    margin-bottom: 32px;
+  }
+
+  /* Info boxes */
+  .info-box {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--gray-700);
+    line-height: 1.6;
+    font-family: Arial, sans-serif;
+  }
+
+  .info-box-warning {
+    border-left: 3px solid var(--red);
+    background: var(--red-light);
+  }
+
+  .info-box-title {
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-700);
+    margin-bottom: 8px;
+    font-family: Arial, sans-serif;
+  }
+
+  .info-box-warning .info-box-title { color: var(--red); }
+
+  @media (max-width: 860px) {
+    .symptom-layout {
+      grid-template-columns: 1fr;
+    }
+    .symptom-aside { order: -1; }
+  }
+
+  @media (max-width: 560px) {
+    .form-row { grid-template-columns: 1fr; }
+    .form-actions { flex-direction: column; }
+    .form-actions .btn { width: 100%; text-align: center; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  // If severity is set to critical, show an immediate warning
+  document.getElementById('severity').addEventListener('change', function () {
+    var existing = document.getElementById('critical-warning');
+    if (this.value === 'critical') {
+      if (!existing) {
+        var warn = document.createElement('p');
+        warn.id = 'critical-warning';
+        warn.className = 'form-error';
+        warn.style.fontWeight = 'bold';
+        warn.textContent = 'Critical severity selected. An alert will be sent to the on-duty doctor immediately on submission.';
+        this.parentNode.appendChild(warn);
+      }
+    } else {
+      if (existing) existing.remove();
+    }
+  });
+</script>
+{% endblock %}

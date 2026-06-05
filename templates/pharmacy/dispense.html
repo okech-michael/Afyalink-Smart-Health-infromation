@@ -1,0 +1,379 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dispense Drugs — AfyaLink{% endblock %}
+
+{% block nav_dispense %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Dispense drugs</h1>
+    <p>{{ request.user.profile.facility.name }}</p>
+  </div>
+  <a href="{% url 'pharmacy_dashboard' %}" class="btn btn-secondary">Back to pharmacy</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if dispensed %}
+<div class="confirm-box">
+  <div class="confirm-icon">&#10003;</div>
+  <h2>Drugs dispensed</h2>
+  <p>
+    Prescription for <strong>{{ dispensed_visit.patient.get_full_name }}</strong>
+    has been dispensed. Stock has been updated automatically.
+  </p>
+  <p class="mt-8 text-muted">The billing department has been notified.</p>
+  <div class="confirm-actions">
+    <a href="{% url 'pharmacy_dashboard' %}" class="btn btn-secondary">Back to pharmacy</a>
+    <a href="{% url 'pharmacy_dispense' %}" class="btn btn-primary">Dispense next</a>
+  </div>
+</div>
+
+{% else %}
+
+<div class="dispense-layout">
+<div class="dispense-main">
+
+  <!-- Select visit -->
+  <div class="card">
+    <p class="card-title">Select prescription</p>
+
+    {% if preselected_visit %}
+      <input type="hidden" name="visit_display" value="{{ preselected_visit.id }}" />
+      <div class="selected-patient-box">
+        <p class="selected-label">Patient</p>
+        <p class="selected-name">{{ preselected_visit.patient.get_full_name }}</p>
+        <p class="selected-meta">
+          Visit #{{ preselected_visit.id }}
+          &mdash; Dr. {{ preselected_visit.consultation.doctor.get_full_name|default:"—" }}
+          &mdash; {{ preselected_visit.date|date:"j M Y" }}
+        </p>
+      </div>
+
+    {% else %}
+      <div class="form-group">
+        <label for="visit_select">Select patient prescription</label>
+        <select id="visit_select" name="visit_id_select" onchange="this.form && null">
+          <option value="" disabled selected>-- Select prescription --</option>
+          {% for visit in pending_visits %}
+            <option value="{{ visit.id }}">
+              {{ visit.patient.get_full_name }}
+              — Visit #{{ visit.id }}
+              — {{ visit.date|date:"j M" }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <a href="#" id="load-visit-btn" class="btn btn-secondary btn-sm mt-8"
+         onclick="loadVisit(); return false;">
+        Load prescription
+      </a>
+    {% endif %}
+  </div>
+
+  <!-- Prescription list -->
+  {% if preselected_visit and preselected_visit.prescriptions.exists %}
+  <form method="POST" action="{% url 'pharmacy_dispense' %}">
+    {% csrf_token %}
+    <input type="hidden" name="visit_id" value="{{ preselected_visit.id }}" />
+
+    <div class="card">
+      <p class="card-title">Prescription items</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Drug</th>
+              <th>Dosage</th>
+              <th>Frequency</th>
+              <th>Duration</th>
+              <th>Qty to dispense</th>
+              <th>Stock available</th>
+              <th>Dispense</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rx in preselected_visit.prescriptions.all %}
+            <tr>
+              <td>
+                <p class="drug-name-cell">{{ rx.drug_name }}</p>
+              </td>
+              <td>{{ rx.dosage }}</td>
+              <td>{{ rx.frequency }}</td>
+              <td>{{ rx.duration }}</td>
+              <td>
+                <input
+                  type="number"
+                  name="qty_{{ rx.id }}"
+                  min="0"
+                  value="{{ rx.quantity_to_dispense|default:'1' }}"
+                  class="qty-input"
+                />
+              </td>
+              <td>
+                {% with stock=rx.drug_name|get_stock:request.user.profile.facility %}
+                  {% if stock %}
+                    <span class="badge
+                      {% if stock.status == 'available' %}badge-green
+                      {% elif stock.status == 'low' %}badge-amber
+                      {% else %}badge-red{% endif %}">
+                      {{ stock.quantity_remaining }} {{ stock.unit }}
+                    </span>
+                  {% else %}
+                    <span class="badge badge-gray">Unknown</span>
+                  {% endif %}
+                {% endwith %}
+              </td>
+              <td>
+                <input type="checkbox" name="dispense_{{ rx.id }}"
+                  value="1"
+                  {% if not rx.dispensed %}checked{% endif %}
+                  class="dispense-check"
+                />
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="form-group mt-16">
+        <label for="dispense_notes">Pharmacist notes</label>
+        <textarea
+          id="dispense_notes"
+          name="dispense_notes"
+          rows="2"
+          placeholder="Any counselling notes, substitutions or instructions for the patient..."
+        ></textarea>
+      </div>
+
+      <div class="form-actions">
+        <a href="{% url 'pharmacy_dashboard' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">
+          Confirm dispense &amp; update stock
+        </button>
+      </div>
+
+    </div>
+  </form>
+
+  {% elif preselected_visit %}
+    <div class="card">
+      <p class="text-muted">No pending prescriptions found for this visit.</p>
+    </div>
+  {% endif %}
+
+</div>
+
+<!-- ASIDE: Patient info + stock summary -->
+<aside class="dispense-aside">
+
+  {% if preselected_visit %}
+  <div class="card">
+    <p class="card-title">Patient</p>
+    <p class="aside-patient-name">{{ preselected_visit.patient.get_full_name }}</p>
+    <table class="aside-table">
+      <tr>
+        <td>Age</td>
+        <td>{{ preselected_visit.patient.profile.age|default:"—" }}</td>
+      </tr>
+      <tr>
+        <td>Allergies</td>
+        <td class="allergy-cell">
+          {{ preselected_visit.patient.profile.known_allergies|default:"None" }}
+        </td>
+      </tr>
+      <tr>
+        <td>Diagnosis</td>
+        <td>{{ preselected_visit.consultation.diagnosis|default:"—" }}</td>
+      </tr>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <p class="card-title">Stock status</p>
+    {% if stock_summary %}
+      {% for drug in stock_summary %}
+      <div class="stock-row">
+        <p class="stock-drug">{{ drug.drug_name }}</p>
+        <span class="badge
+          {% if drug.status == 'available' %}badge-green
+          {% elif drug.status == 'low' %}badge-amber
+          {% else %}badge-red{% endif %}">
+          {{ drug.quantity_remaining }} {{ drug.unit }}
+        </span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">Select a prescription to see stock.</p>
+    {% endif %}
+  </div>
+
+</aside>
+
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .dispense-layout {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .dispense-main { min-width: 0; }
+
+  .selected-patient-box {
+    background: var(--blue-light);
+    border: 1px solid var(--blue);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 8px;
+  }
+
+  .selected-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--blue-dark);
+    margin-bottom: 4px;
+  }
+
+  .selected-name {
+    font-size: 15px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 3px;
+  }
+
+  .selected-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  .drug-name-cell {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .qty-input {
+    width: 70px;
+    padding: 5px 8px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .dispense-check {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--blue);
+    cursor: pointer;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  /* Confirm */
+  .confirm-box {
+    max-width: 480px;
+    margin: 40px auto;
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-top: 4px solid var(--green);
+    border-radius: var(--radius);
+    padding: 36px 36px 28px;
+    text-align: center;
+  }
+
+  .confirm-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--green-light);
+    color: var(--green);
+    font-size: 22px;
+    line-height: 48px;
+    text-align: center;
+    margin: 0 auto 16px;
+    border: 2px solid var(--green);
+  }
+
+  .confirm-box h2 { font-size: 20px; font-family: Georgia, serif; color: var(--green); margin-bottom: 12px; }
+  .confirm-box p  { font-size: 14px; color: var(--gray-700); line-height: 1.6; }
+  .confirm-actions { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+
+  /* Aside */
+  .aside-patient-name {
+    font-size: 14px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 10px;
+  }
+
+  .aside-table {
+    width: 100%;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    border-collapse: collapse;
+  }
+
+  .aside-table td {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    vertical-align: top;
+  }
+
+  .aside-table td:first-child { color: var(--gray-500); width: 70px; padding-right: 8px; }
+  .aside-table tr:last-child td { border-bottom: none; }
+  .allergy-cell { color: var(--red); font-weight: bold; }
+
+  .stock-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--gray-200);
+    font-family: Arial, sans-serif;
+  }
+
+  .stock-row:last-child { border-bottom: none; }
+
+  .stock-drug { font-size: 12px; color: var(--gray-700); }
+
+  @media (max-width: 860px) {
+    .dispense-layout { grid-template-columns: 1fr; }
+    .dispense-aside { order: -1; }
+  }
+
+  @media (max-width: 560px) {
+    .form-actions { flex-direction: column; }
+    .form-actions .btn { text-align: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}

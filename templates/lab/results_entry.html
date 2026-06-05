@@ -1,0 +1,424 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Enter Lab Results — AfyaLink{% endblock %}
+
+{% block nav_results_entry %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Enter lab results</h1>
+    <p>{{ request.user.profile.facility.name }}</p>
+  </div>
+  <a href="{% url 'lab_dashboard' %}" class="btn btn-secondary">Back to lab</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if result_saved %}
+<div class="confirm-box">
+  <div class="confirm-icon">&#10003;</div>
+  <h2>Result saved</h2>
+  <p>
+    <strong>{{ saved_result.test_name }}</strong> result for
+    <strong>{{ saved_result.visit.patient.get_full_name }}</strong>
+    has been saved and the doctor has been notified.
+  </p>
+  <div class="confirm-actions">
+    <a href="{% url 'lab_dashboard' %}" class="btn btn-secondary">Back to lab</a>
+    <a href="{% url 'lab_results_entry' %}" class="btn btn-primary">Enter another result</a>
+  </div>
+</div>
+
+{% else %}
+
+<div class="results-layout">
+<div class="results-main">
+
+  <!-- Select test order -->
+  <div class="card">
+    <p class="card-title">Select test order</p>
+
+    {% if preselected_order %}
+      <input type="hidden" name="order_id_display" value="{{ preselected_order.id }}" />
+      <div class="selected-order-box">
+        <div class="order-info-grid">
+          <div class="order-info-item">
+            <p class="order-info-label">Patient</p>
+            <p class="order-info-value">{{ preselected_order.visit.patient.get_full_name }}</p>
+          </div>
+          <div class="order-info-item">
+            <p class="order-info-label">Test</p>
+            <p class="order-info-value test-name-display">{{ preselected_order.test_name }}</p>
+          </div>
+          <div class="order-info-item">
+            <p class="order-info-label">Ordered by</p>
+            <p class="order-info-value">Dr. {{ preselected_order.ordered_by.get_full_name }}</p>
+          </div>
+          <div class="order-info-item">
+            <p class="order-info-label">Urgency</p>
+            <p class="order-info-value">
+              <span class="badge
+                {% if preselected_order.urgency == 'stat' %}badge-red
+                {% elif preselected_order.urgency == 'urgent' %}badge-amber
+                {% else %}badge-gray{% endif %}">
+                {{ preselected_order.urgency|upper }}
+              </span>
+            </p>
+          </div>
+          {% if preselected_order.notes %}
+          <div class="order-info-item order-info-full">
+            <p class="order-info-label">Doctor's notes</p>
+            <p class="order-info-value">{{ preselected_order.notes }}</p>
+          </div>
+          {% endif %}
+        </div>
+        <a href="{% url 'lab_results_entry' %}" class="btn btn-secondary btn-sm mt-8"
+           style="display:inline-block;">
+          Change test
+        </a>
+      </div>
+
+    {% else %}
+      <div class="form-group">
+        <label for="order_select">Choose pending test</label>
+        <select id="order_select" name="order_id" required onchange="loadOrderInfo(this)">
+          <option value="" disabled selected>-- Select test order --</option>
+          {% for order in pending_orders %}
+            <option value="{{ order.id }}"
+              data-patient="{{ order.visit.patient.get_full_name }}"
+              data-test="{{ order.test_name }}"
+              data-doctor="Dr. {{ order.ordered_by.get_full_name }}"
+              data-urgency="{{ order.urgency }}"
+              data-notes="{{ order.notes|default:'' }}">
+              {{ order.visit.patient.get_full_name }}
+              — {{ order.test_name }}
+              — {{ order.urgency|upper }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="order-preview" style="display:none;" class="order-preview-box">
+        <p class="order-preview-patient" id="prev-patient"></p>
+        <p class="order-preview-meta" id="prev-meta"></p>
+      </div>
+    {% endif %}
+  </div>
+
+
+  <!-- Results form -->
+  <form method="POST" action="{% url 'lab_results_entry' %}">
+    {% csrf_token %}
+    {% if preselected_order %}
+      <input type="hidden" name="order_id" value="{{ preselected_order.id }}" />
+    {% endif %}
+
+    <div class="card">
+      <p class="card-title">Result values</p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="result_value">Result value</label>
+          <input
+            type="text"
+            id="result_value"
+            name="result_value"
+            value="{{ form.result_value.value|default:'' }}"
+            placeholder="e.g. 5.2, Positive, 120"
+            required
+          />
+          {% if form.result_value.errors %}
+            <p class="form-error">{{ form.result_value.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          <label for="unit">Unit of measurement</label>
+          <input
+            type="text"
+            id="unit"
+            name="unit"
+            value="{{ form.unit.value|default:'' }}"
+            placeholder="e.g. mmol/L, g/dL, cells/mm3"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="normal_range">Normal range (reference)</label>
+          <input
+            type="text"
+            id="normal_range"
+            name="normal_range"
+            value="{{ form.normal_range.value|default:'' }}"
+            placeholder="e.g. 3.9 – 5.6 mmol/L"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="status">Result status</label>
+          <select id="status" name="status" required>
+            <option value="normal"   {% if form.status.value == 'normal' or not form.status.value %}selected{% endif %}>Normal — within reference range</option>
+            <option value="abnormal" {% if form.status.value == 'abnormal' %}selected{% endif %}>Abnormal — outside reference range</option>
+            <option value="critical" {% if form.status.value == 'critical' %}selected{% endif %}>Critical — immediate attention needed</option>
+          </select>
+          {% if form.status.errors %}
+            <p class="form-error">{{ form.status.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="lab_notes">Lab notes / comments</label>
+        <textarea
+          id="lab_notes"
+          name="lab_notes"
+          rows="2"
+          placeholder="Any additional observations, methodology notes or comments for the doctor..."
+        >{{ form.lab_notes.value|default:'' }}</textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="date_resulted">Date of result</label>
+          <input
+            type="date"
+            id="date_resulted"
+            name="date_resulted"
+            value="{{ today|date:'Y-m-d' }}"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="time_resulted">Time</label>
+          <input
+            type="time"
+            id="time_resulted"
+            name="time_resulted"
+            value="{{ now|time:'H:i' }}"
+            required
+          />
+        </div>
+      </div>
+
+      {% if form.non_field_errors %}
+        <p class="form-error">{{ form.non_field_errors|join:", " }}</p>
+      {% endif %}
+
+      <div class="form-actions">
+        <a href="{% url 'lab_dashboard' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save result &amp; notify doctor</button>
+      </div>
+
+    </div>
+  </form>
+
+</div>
+
+<!-- ASIDE: Common reference ranges -->
+<aside class="results-aside">
+  <div class="card">
+    <p class="card-title">Common reference ranges</p>
+    <table class="ref-table">
+      <thead>
+        <tr><th>Test</th><th>Normal range</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Haemoglobin (M)</td><td>13.5–17.5 g/dL</td></tr>
+        <tr><td>Haemoglobin (F)</td><td>12.0–15.5 g/dL</td></tr>
+        <tr><td>WBC</td><td>4.5–11.0 ×10³/mm³</td></tr>
+        <tr><td>Platelets</td><td>150–400 ×10³/mm³</td></tr>
+        <tr><td>Blood glucose (fasting)</td><td>3.9–5.6 mmol/L</td></tr>
+        <tr><td>Blood glucose (random)</td><td>&lt; 11.1 mmol/L</td></tr>
+        <tr><td>Creatinine (M)</td><td>62–115 µmol/L</td></tr>
+        <tr><td>Creatinine (F)</td><td>53–97 µmol/L</td></tr>
+        <tr><td>Urea</td><td>2.5–7.5 mmol/L</td></tr>
+        <tr><td>Sodium</td><td>136–145 mmol/L</td></tr>
+        <tr><td>Potassium</td><td>3.5–5.1 mmol/L</td></tr>
+        <tr><td>ALT</td><td>7–56 U/L</td></tr>
+        <tr><td>AST</td><td>10–40 U/L</td></tr>
+        <tr><td>Total bilirubin</td><td>3.4–17.1 µmol/L</td></tr>
+        <tr><td>CD4 count</td><td>&gt; 500 cells/mm³</td></tr>
+        <tr><td>ESR (M)</td><td>0–15 mm/hr</td></tr>
+        <tr><td>ESR (F)</td><td>0–20 mm/hr</td></tr>
+      </tbody>
+    </table>
+  </div>
+</aside>
+
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .results-layout {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .results-main { min-width: 0; }
+
+  .selected-order-box {
+    background: var(--blue-light);
+    border: 1px solid var(--blue);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 8px;
+  }
+
+  .order-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+  }
+
+  .order-info-full { grid-column: 1 / -1; }
+
+  .order-info-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--blue-dark);
+    margin-bottom: 2px;
+  }
+
+  .order-info-value {
+    font-size: 13px;
+    color: var(--gray-700);
+    font-family: Georgia, serif;
+  }
+
+  .test-name-display { font-weight: bold; color: var(--blue-dark); font-size: 14px; }
+
+  .order-preview-box {
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    font-family: Arial, sans-serif;
+  }
+
+  .order-preview-patient { font-weight: bold; color: var(--blue-dark); font-size: 13px; }
+  .order-preview-meta { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-error {
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  /* Confirm */
+  .confirm-box {
+    max-width: 480px;
+    margin: 40px auto;
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-top: 4px solid var(--green);
+    border-radius: var(--radius);
+    padding: 36px 36px 28px;
+    text-align: center;
+  }
+
+  .confirm-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--green-light);
+    color: var(--green);
+    font-size: 22px;
+    line-height: 48px;
+    text-align: center;
+    margin: 0 auto 16px;
+    border: 2px solid var(--green);
+  }
+
+  .confirm-box h2 { font-size: 20px; font-family: Georgia, serif; color: var(--green); margin-bottom: 12px; }
+  .confirm-box p  { font-size: 14px; color: var(--gray-700); line-height: 1.6; }
+
+  .confirm-actions { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+
+  /* Reference table */
+  .ref-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+  }
+
+  .ref-table th {
+    background: var(--gray-100);
+    padding: 6px 8px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray-500);
+    border-bottom: 1px solid var(--gray-300);
+    text-align: left;
+  }
+
+  .ref-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    vertical-align: middle;
+  }
+
+  .ref-table tr:last-child td { border-bottom: none; }
+  .ref-table td:last-child { text-align: right; font-weight: bold; color: var(--blue-dark); }
+
+  @media (max-width: 860px) {
+    .results-layout { grid-template-columns: 1fr; }
+    .results-aside { order: -1; }
+  }
+
+  @media (max-width: 560px) {
+    .form-row { grid-template-columns: 1fr; }
+    .order-info-grid { grid-template-columns: 1fr; }
+    .form-actions { flex-direction: column; }
+    .form-actions .btn { text-align: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  function loadOrderInfo(select) {
+    var opt = select.options[select.selectedIndex];
+    if (!opt.value) return;
+    document.getElementById('prev-patient').textContent = opt.getAttribute('data-patient');
+    document.getElementById('prev-meta').textContent =
+      opt.getAttribute('data-test') + ' — ' +
+      opt.getAttribute('data-doctor') + ' — ' +
+      opt.getAttribute('data-urgency').toUpperCase();
+    document.getElementById('order-preview').style.display = 'block';
+  }
+</script>
+{% endblock %}

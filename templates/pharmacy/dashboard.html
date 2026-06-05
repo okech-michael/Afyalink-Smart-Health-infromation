@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Pharmacy Dashboard — AfyaLink{% endblock %}
+
+{% block nav_pharmacy_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Pharmacy</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <a href="{% url 'pharmacy_dispense' %}" class="btn btn-primary">Dispense drugs</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STATS ── -->
+<div class="stat-grid">
+  <div class="stat-card amber">
+    <p class="stat-label">Pending prescriptions</p>
+    <p class="stat-value">{{ pending_count|default:"0" }}</p>
+  </div>
+  <div class="stat-card green">
+    <p class="stat-label">Dispensed today</p>
+    <p class="stat-value">{{ dispensed_today|default:"0" }}</p>
+  </div>
+  <div class="stat-card red">
+    <p class="stat-label">Low stock drugs</p>
+    <p class="stat-value">{{ low_stock_count|default:"0" }}</p>
+  </div>
+  <div class="stat-card">
+    <p class="stat-label">Out of stock</p>
+    <p class="stat-value">{{ out_of_stock_count|default:"0" }}</p>
+  </div>
+</div>
+
+
+<!-- ── MAIN GRID ── -->
+<div class="pharmacy-grid">
+
+  <!-- LEFT: Pending prescriptions -->
+  <div class="card">
+    <div class="flex-between mb-16">
+      <p class="card-title" style="margin-bottom:0;border:none;padding:0;">
+        Pending prescriptions
+        <span class="record-count">{{ pending_prescriptions|length }} waiting</span>
+      </p>
+    </div>
+
+    {% if pending_prescriptions %}
+    <div class="prescription-list">
+      {% for rx_group in pending_prescriptions %}
+      <div class="rx-group">
+        <div class="rx-group-head">
+          <div>
+            <p class="rx-patient-name">{{ rx_group.patient_name }}</p>
+            <p class="rx-meta">
+              Visit #{{ rx_group.visit_id }}
+              &mdash; Dr. {{ rx_group.doctor_name }}
+              &mdash; {{ rx_group.time }}
+            </p>
+          </div>
+          <a href="{% url 'pharmacy_dispense' %}?visit={{ rx_group.visit_id }}"
+             class="btn btn-primary btn-sm">
+            Dispense
+          </a>
+        </div>
+        <div class="drug-tags">
+          {% for drug in rx_group.drugs %}
+            <span class="drug-tag">{{ drug.drug_name }} {{ drug.dosage }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+      <div class="empty-state">
+        <p class="empty-title">No pending prescriptions</p>
+        <p class="text-muted">Prescriptions from completed consultations will appear here.</p>
+      </div>
+    {% endif %}
+  </div>
+
+
+  <!-- RIGHT col -->
+  <div class="pharmacy-right-col">
+
+    <!-- Stock alerts -->
+    {% if low_stock_drugs or out_of_stock_drugs %}
+    <div class="card stock-alert-card">
+      <p class="card-title stock-alert-title">Stock alerts</p>
+
+      {% for drug in out_of_stock_drugs %}
+      <div class="stock-alert-item">
+        <div>
+          <p class="stock-drug-name">{{ drug.drug_name }}</p>
+          <p class="text-muted" style="font-size:11px;">{{ drug.category|default:"" }}</p>
+        </div>
+        <span class="badge badge-red">Out of stock</span>
+      </div>
+      {% endfor %}
+
+      {% for drug in low_stock_drugs %}
+      <div class="stock-alert-item">
+        <div>
+          <p class="stock-drug-name">{{ drug.drug_name }}</p>
+          <p class="text-muted" style="font-size:11px;">
+            {{ drug.quantity_remaining }} {{ drug.unit }} remaining
+          </p>
+        </div>
+        <span class="badge badge-amber">Low stock</span>
+      </div>
+      {% endfor %}
+
+    </div>
+    {% endif %}
+
+    <!-- Dispensed today summary -->
+    <div class="card">
+      <p class="card-title">Dispensed today</p>
+      {% if dispensed_list %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Drug</th>
+                <th>Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in dispensed_list %}
+              <tr>
+                <td>{{ item.visit.patient.get_full_name }}</td>
+                <td>{{ item.drug_name }} {{ item.dosage }}</td>
+                <td>{{ item.quantity_dispensed }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted">No drugs dispensed yet today.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .stat-card.red { border-top-color: var(--red); }
+  .stat-card.red .stat-value { color: var(--red); }
+
+  .pharmacy-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .pharmacy-right-col { display: flex; flex-direction: column; }
+
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  .prescription-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .rx-group {
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+
+  .rx-group-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .rx-patient-name {
+    font-size: 14px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 3px;
+  }
+
+  .rx-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  .drug-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .drug-tag {
+    background: var(--blue-light);
+    border: 1px solid var(--gray-200);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--blue-dark);
+  }
+
+  .empty-state { padding: 40px 20px; text-align: center; }
+  .empty-title { font-size: 15px; font-family: Georgia, serif; color: var(--gray-700); margin-bottom: 8px; }
+
+  .stock-alert-card { border-left: 3px solid var(--red); }
+  .stock-alert-title { color: var(--red); }
+
+  .stock-alert-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  .stock-alert-item:last-child { border-bottom: none; }
+
+  .stock-drug-name {
+    font-size: 13px;
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+  }
+
+  @media (max-width: 900px) {
+    .pharmacy-grid { grid-template-columns: 1fr; }
+    .pharmacy-right-col { order: -1; }
+  }
+
+  @media (max-width: 600px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .rx-group-head { flex-direction: column; gap: 8px; }
+  }
+
+</style>
+{% endblock %}

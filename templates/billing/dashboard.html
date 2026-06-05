@@ -1,0 +1,287 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Billing Dashboard — AfyaLink{% endblock %}
+
+{% block nav_billing_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Billing</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <a href="{% url 'billing_invoice' %}" class="btn btn-primary">View invoices</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STATS ── -->
+<div class="stat-grid">
+  <div class="stat-card amber">
+    <p class="stat-label">Pending billing</p>
+    <p class="stat-value">{{ pending_count|default:"0" }}</p>
+  </div>
+  <div class="stat-card green">
+    <p class="stat-label">Billed today</p>
+    <p class="stat-value">{{ billed_today|default:"0" }}</p>
+  </div>
+  <div class="stat-card green">
+    <p class="stat-label">Revenue today (KES)</p>
+    <p class="stat-value" style="font-size:18px;">{{ revenue_today|floatformat:0|default:"0" }}</p>
+  </div>
+  <div class="stat-card amber">
+    <p class="stat-label">Unpaid invoices</p>
+    <p class="stat-value">{{ unpaid_count|default:"0" }}</p>
+  </div>
+</div>
+
+
+<!-- ── MAIN GRID ── -->
+<div class="billing-grid">
+
+  <!-- LEFT: Visits ready for billing -->
+  <div class="card">
+    <p class="card-title">
+      Ready for billing
+      <span class="record-count">{{ ready_visits|length }} visits</span>
+    </p>
+
+    {% if ready_visits %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>Visit type</th>
+            <th>Consultation</th>
+            <th>Lab</th>
+            <th>Pharmacy</th>
+            <th>Estimated total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for visit in ready_visits %}
+          <tr>
+            <td>
+              <p class="patient-name-cell">{{ visit.patient.get_full_name }}</p>
+              <p class="patient-meta-cell">{{ visit.get_payment_mode_display }}</p>
+            </td>
+            <td>{{ visit.get_visit_type_display }}</td>
+            <td>
+              {% if visit.consultation %}
+                <span class="badge badge-green">Done</span>
+              {% else %}
+                <span class="badge badge-gray">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if visit.lab_results.filter(status='ready').exists %}
+                <span class="badge badge-green">Done</span>
+              {% elif visit.lab_results.exists %}
+                <span class="badge badge-amber">Pending</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if visit.prescriptions.filter(dispensed=True).exists %}
+                <span class="badge badge-green">Done</span>
+              {% elif visit.prescriptions.exists %}
+                <span class="badge badge-amber">Pending</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if visit.invoice %}
+                KES {{ visit.invoice.total_cost|floatformat:2 }}
+              {% else %}
+                <span class="text-muted">Auto-calculate</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{% url 'billing_invoice' %}?visit={{ visit.id }}"
+                 class="btn btn-primary btn-sm">
+                Generate bill
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% else %}
+      <div class="empty-state">
+        <p class="empty-title">No visits pending billing</p>
+        <p class="text-muted">Completed visits will appear here once consultation and pharmacy are done.</p>
+      </div>
+    {% endif %}
+  </div>
+
+
+  <!-- RIGHT: Recent payments + summary -->
+  <div class="billing-right-col">
+
+    <!-- Recent payments -->
+    <div class="card">
+      <p class="card-title">Recent payments</p>
+      {% if recent_payments %}
+        {% for invoice in recent_payments %}
+        <div class="payment-row">
+          <div>
+            <p class="payment-patient">{{ invoice.visit.patient.get_full_name }}</p>
+            <p class="payment-meta text-muted">
+              {{ invoice.visit.get_payment_mode_display }}
+              &mdash; {{ invoice.paid_at|time:"H:i"|default:"—" }}
+            </p>
+          </div>
+          <p class="payment-amount">KES {{ invoice.total_cost|floatformat:2 }}</p>
+        </div>
+        {% if not forloop.last %}<hr class="item-divider">{% endif %}
+        {% endfor %}
+      {% else %}
+        <p class="text-muted">No payments recorded today.</p>
+      {% endif %}
+    </div>
+
+    <!-- Payment mode breakdown -->
+    <div class="card">
+      <p class="card-title">Payment breakdown today</p>
+      <table class="breakdown-table">
+        <tbody>
+          <tr>
+            <td>Cash</td>
+            <td class="text-right">{{ cash_count|default:"0" }} visits</td>
+            <td class="text-right">KES {{ cash_total|floatformat:0|default:"0" }}</td>
+          </tr>
+          <tr>
+            <td>NHIF</td>
+            <td class="text-right">{{ nhif_count|default:"0" }} visits</td>
+            <td class="text-right">KES {{ nhif_total|floatformat:0|default:"0" }}</td>
+          </tr>
+          <tr>
+            <td>Insurance</td>
+            <td class="text-right">{{ insurance_count|default:"0" }} visits</td>
+            <td class="text-right">KES {{ insurance_total|floatformat:0|default:"0" }}</td>
+          </tr>
+          <tr>
+            <td>Free / waived</td>
+            <td class="text-right">{{ free_count|default:"0" }} visits</td>
+            <td class="text-right">—</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr class="breakdown-total">
+            <td>Total</td>
+            <td></td>
+            <td class="text-right">KES {{ revenue_today|floatformat:0|default:"0" }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .billing-grid {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .billing-right-col { display: flex; flex-direction: column; }
+
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  .patient-name-cell {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .patient-meta-cell { font-size: 11px; color: var(--gray-500); font-family: Arial, sans-serif; }
+
+  .empty-state { padding: 40px 20px; text-align: center; }
+  .empty-title { font-size: 15px; font-family: Georgia, serif; color: var(--gray-700); margin-bottom: 8px; }
+
+  .payment-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    gap: 8px;
+  }
+
+  .payment-patient {
+    font-size: 13px;
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+  }
+
+  .payment-meta { font-size: 11px; margin-top: 2px; }
+
+  .payment-amount {
+    font-size: 14px;
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--green);
+    flex-shrink: 0;
+  }
+
+  .item-divider { border: none; border-top: 1px solid var(--gray-200); margin: 2px 0; }
+
+  .breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+  }
+
+  .breakdown-table td {
+    padding: 7px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+  }
+
+  .breakdown-table tbody tr:last-child td { border-bottom: none; }
+
+  .breakdown-total td {
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+    padding-top: 10px;
+    border-top: 2px solid var(--gray-300);
+    font-size: 14px;
+  }
+
+  @media (max-width: 900px) {
+    .billing-grid { grid-template-columns: 1fr; }
+    .billing-right-col { order: -1; }
+  }
+
+  @media (max-width: 600px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}

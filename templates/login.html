@@ -1,0 +1,478 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Sign In — AfyaLink{% endblock %}
+
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --forest:   #14b8a6;
+    --forest-md:#0f766e;
+    --forest-lt:#d1fae5;
+    --cream:    #effdfa;
+    --warm:     #ecfdf5;
+    --amber:    #f59e0b;
+    --amber-lt: #fef3c7;
+    --text:     #0f172a;
+    --muted:    #475569;
+    --border:   #d1fae5;
+    --white:    #ffffff;
+    --red:      #dc2626;
+    --radius:   16px;
+  }
+
+  /* ── Reset layout from base ── */
+  .sidebar { display: none !important; }
+  .layout  { background: var(--cream); min-height: 100vh; padding: 0 !important; }
+  .main-content { max-width: none !important; padding: 0 !important; flex: 1; }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Page shell ── */
+  .page {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── Left panel — decorative ── */
+  .panel-left {
+    background: var(--forest);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 48px 52px;
+  }
+
+  /* SVG wavy pattern background */
+  .panel-left::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10s-10-4.477-10-10 4.477-10 10-10zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10S0 25.523 0 20s4.477-10 10-10zm10 60C9.477 70 5 65.523 5 60s4.477-10 10-10 10 4.477 10 10-4.477 10-10 10zm40-40c-5.523 0-10-4.477-10-10s4.477-10 10-10 10 4.477 10 10-4.477 10-10 10z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 1;
+  }
+
+  /* Large decorative cross */
+  .panel-left::after {
+    content: '+';
+    position: absolute;
+    right: -40px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 340px;
+    font-weight: 800;
+    color: rgba(255,255,255,0.04);
+    line-height: 1;
+    pointer-events: none;
+    font-family: 'Playfair Display', serif;
+  }
+
+  .left-brand {
+    position: relative;
+    z-index: 1;
+  }
+  .left-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0;
+  }
+  .left-logo-mark {
+    width: 44px; height: 44px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px;
+    display: grid; place-items: center;
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    font-family: 'Playfair Display', serif;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .left-logo-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.3px;
+  }
+
+  .left-body {
+    position: relative;
+    z-index: 1;
+  }
+  .left-tagline {
+    font-family: 'Playfair Display', serif;
+    font-size: 38px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 20px;
+    letter-spacing: -0.5px;
+  }
+  .left-tagline em {
+    font-style: italic;
+    color: #7dd3b8;
+  }
+  .left-desc {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.7;
+    max-width: 360px;
+  }
+
+  .left-roles {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .left-roles-label {
+    font-size: 10px;
+    font-family: 'DM Sans', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 4px;
+  }
+  .left-role-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .left-role-pill span:first-child { font-size: 16px; }
+  .left-role-pill span:last-child {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: rgba(255,255,255,0.85);
+    font-weight: 500;
+  }
+
+  /* ── Right panel — form ── */
+  .panel-right {
+    background: var(--cream);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 32px;
+    position: relative;
+  }
+
+  /* Subtle warm texture */
+  .panel-right::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' fill='%23d6cbbf' fill-opacity='0.3'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  .form-box {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .form-heading {
+    font-family: 'Playfair Display', serif;
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .form-sub {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 32px;
+    line-height: 1.6;
+  }
+
+  /* Alert */
+  .messages { margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .alert {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    background: #fef2f2;
+    color: var(--red);
+    border: 1px solid #fecaca;
+  }
+
+  /* Fields */
+  .field { margin-bottom: 18px; }
+  .field label {
+    display: block;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 7px;
+  }
+  .field input,
+  .field select {
+    width: 100%;
+    padding: 13px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    background: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .field input:focus,
+  .field select:focus {
+    border-color: var(--forest-md);
+    box-shadow: 0 0 0 4px rgba(26,107,74,0.1);
+  }
+  .field select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 40px;
+    cursor: pointer;
+  }
+
+  /* Input with icon */
+  .input-wrap { position: relative; }
+  .input-wrap .ico {
+    position: absolute;
+    left: 14px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 15px;
+    pointer-events: none;
+  }
+  .input-wrap input { padding-left: 42px; }
+
+  .field-error {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    color: var(--red);
+    margin-top: 5px;
+  }
+
+  /* Submit */
+  .btn-submit {
+    width: 100%;
+    padding: 14px;
+    background: var(--forest);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+    margin-top: 8px;
+  }
+  .btn-submit:hover {
+    background: var(--forest-md);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(15,76,53,0.25);
+  }
+  .btn-submit .arrow {
+    font-size: 18px;
+    transition: transform 0.15s;
+  }
+  .btn-submit:hover .arrow { transform: translateX(4px); }
+
+  /* Footer links */
+  .form-footer {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+  }
+  .form-footer a {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--forest-md);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .form-footer a:hover { text-decoration: underline; }
+  .form-footer .divider {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* Divider line */
+  .or-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .or-divider::before, .or-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .or-divider span {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 860px) {
+    .page { grid-template-columns: 1fr; }
+    .panel-left {
+      padding: 32px 28px 28px;
+      min-height: 0;
+    }
+    .panel-left::after { display: none; }
+    .left-tagline { font-size: 26px; }
+    .left-body { margin: 24px 0; }
+    .left-desc { display: none; }
+    .left-roles { flex-direction: row; flex-wrap: wrap; }
+    .left-role-pill { flex: 1 0 140px; }
+    .panel-right { padding: 32px 20px 40px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- Left decorative panel -->
+  <div class="panel-left">
+    <div class="left-brand">
+      <div class="left-logo">
+        <div class="left-logo-mark">+</div>
+        <div class="left-logo-name">AfyaLink</div>
+      </div>
+    </div>
+
+    <div class="left-body">
+      <div class="left-tagline">
+        Connected care,<br><em>every step</em> of the way.
+      </div>
+      <div class="left-desc">
+        AfyaLink connects patients, clinicians, lab staff, pharmacists, and administrators on a single intelligent health platform — built for Kenya, designed for Africa.
+      </div>
+    </div>
+
+    <div class="left-roles">
+      <div class="left-roles-label">Platform access for</div>
+      <div class="left-role-pill">Doctors &amp; Nurses</div>
+      <div class="left-role-pill">Reception &amp; Admin</div>
+      <div class="left-role-pill">Pharmacy &amp; Lab</div>
+      <div class="left-role-pill">Patients</div>
+    </div>
+  </div>
+
+  <!-- Right form panel -->
+  <div class="panel-right">
+    <div class="form-box">
+
+      <div class="form-heading">Welcome back</div>
+      <div class="form-sub">Sign in to your AfyaLink account</div>
+
+      {% if messages %}
+        <div class="messages">
+          {% for message in messages %}
+            <div class="alert">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="POST" action="{% url 'login' %}">
+        {% csrf_token %}
+
+        <!-- Role dropdown -->
+        <div class="field">
+          <label for="id_role">I am signing in as</label>
+          <select id="id_role" name="role" required>
+            <option value="" disabled {% if not form.role.value %}selected{% endif %}>— Select your role —</option>
+            {% for role_value, role_label in form.role.field.choices %}
+              <option value="{{ role_value }}" {% if form.role.value == role_value %}selected{% endif %}>
+                {{ role_label }}
+              </option>
+            {% endfor %}
+          </select>
+          {% if form.role.errors %}
+            <div class="field-error">{{ form.role.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <!-- Username -->
+        <div class="field">
+          <label for="id_username">Username</label>
+          <div class="input-wrap">
+            <input type="text" id="id_username" name="username"
+                   value="{{ form.username.value|default:'' }}"
+                   placeholder="Enter your username" autofocus required />
+          </div>
+          {% if form.username.errors %}
+            <div class="field-error">{{ form.username.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <!-- Password -->
+        <div class="field">
+          <label for="id_password">Password</label>
+          <div class="input-wrap">
+            <input type="password" id="id_password" name="password"
+                   placeholder="Enter your password" required />
+          </div>
+          {% if form.password.errors %}
+            <div class="field-error">{{ form.password.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="field-error" style="margin-bottom:12px;">{{ form.non_field_errors|join:", " }}</div>
+        {% endif %}
+
+        <button type="submit" class="btn-submit">
+          <span>Sign In</span>
+          <span class="arrow">→</span>
+        </button>
+      </form>
+
+      <div class="form-footer">
+        <a href="{% url 'community_pulse' %}" style="font-size: 13px; color: var(--muted); display: block; margin-bottom: 12px; text-decoration: none;">← Back to home</a>
+        <a href="{% url 'password_reset' %}">Forgot your password?</a>
+        <span class="divider">Don't have an account? <a href="{% url 'register' %}">Create one</a></span>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

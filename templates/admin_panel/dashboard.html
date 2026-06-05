@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Admin Dashboard — AfyaLink{% endblock %}
+
+{% block nav_admin_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>System dashboard</h1>
+    <p>AfyaLink administration &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <a href="{% url 'admin_panel_manage_facilities' %}" class="btn btn-primary">Manage facilities</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STATS ── -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <p class="stat-label">Total users</p>
+    <p class="stat-value">{{ total_users|default:"0" }}</p>
+  </div>
+  <div class="stat-card green">
+    <p class="stat-label">Facilities</p>
+    <p class="stat-value">{{ total_facilities|default:"0" }}</p>
+  </div>
+  <div class="stat-card blue">
+    <p class="stat-label">Total visits</p>
+    <p class="stat-value">{{ total_visits|default:"0" }}</p>
+  </div>
+  <div class="stat-card amber">
+    <p class="stat-label">Active alarms</p>
+    <p class="stat-value">{{ active_alarms|default:"0" }}</p>
+  </div>
+</div>
+
+
+<div class="admin-grid">
+
+  <!-- LEFT: Facilities overview -->
+  <div class="card">
+    <p class="card-title">Facilities</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Level</th>
+            <th>Sub-county</th>
+            <th>Drug status</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for facility in facilities %}
+          <tr>
+            <td>
+              <p class="patient-name-cell">{{ facility.name }}</p>
+            </td>
+            <td>Level {{ facility.level }}</td>
+            <td>{{ facility.sub_county }}</td>
+            <td>
+              <span class="badge
+                {% if facility.drug_status == 'available' %}badge-green
+                {% elif facility.drug_status == 'low' %}badge-amber
+                {% else %}badge-red{% endif %}">
+                {{ facility.drug_status|title }}
+              </span>
+            </td>
+            <td>
+              <span class="badge {% if facility.is_active %}badge-green{% else %}badge-gray{% endif %}">
+                {% if facility.is_active %}Active{% else %}Inactive{% endif %}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RIGHT: Recent users -->
+  <div class="card">
+    <p class="card-title">Recent registrations</p>
+    {% if recent_users %}
+      {% for user in recent_users %}
+      <div class="user-row">
+        <div>
+          <p class="user-name">{{ user.get_full_name|default:user.username }}</p>
+          <p class="user-meta text-muted">
+            {{ user.profile.role|title }}
+            {% if user.profile.facility %}
+              &mdash; {{ user.profile.facility.name }}
+            {% endif %}
+          </p>
+        </div>
+        <p class="user-date text-muted">{{ user.date_joined|date:"j M Y" }}</p>
+      </div>
+      {% if not forloop.last %}<hr class="item-divider">{% endif %}
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">No users yet.</p>
+    {% endif %}
+
+    <div class="mt-16">
+      <a href="/admin/auth/user/" class="btn btn-secondary btn-sm">
+        Manage all users in Django admin
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- Quick links to Django admin -->
+<div class="card">
+  <p class="card-title">Quick links</p>
+  <div class="quick-links">
+    <a href="/admin/core/visit/"       class="quick-link-item">All visits</a>
+    <a href="/admin/core/drugstock/"   class="quick-link-item">Drug stock</a>
+    <a href="/admin/core/referral/"    class="quick-link-item">Referrals</a>
+    <a href="/admin/core/emergencyalarm/" class="quick-link-item">Emergency alarms</a>
+    <a href="/admin/core/invoice/"     class="quick-link-item">Invoices</a>
+    <a href="/admin/core/labresult/"   class="quick-link-item">Lab results</a>
+    <a href="/admin/core/reminder/"    class="quick-link-item">Reminders</a>
+    <a href="/admin/core/activitylog/" class="quick-link-item">Activity log</a>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+  .stat-card.blue { border-top-color: var(--blue); }
+  .stat-card.blue .stat-value { color: var(--blue-dark); }
+
+  .admin-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    margin-bottom: 24px;
+    align-items: flex-start;
+  }
+
+  .patient-name-cell {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .user-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    gap: 8px;
+  }
+
+  .user-name {
+    font-size: 13px;
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+    margin-bottom: 2px;
+  }
+
+  .user-meta { font-size: 11px; }
+  .user-date { font-size: 11px; flex-shrink: 0; }
+
+  .item-divider { border: none; border-top: 1px solid var(--gray-200); margin: 2px 0; }
+
+  .quick-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .quick-link-item {
+    display: inline-block;
+    padding: 8px 16px;
+    border: 1px solid var(--blue);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    color: var(--blue);
+    text-decoration: none;
+    transition: background 0.1s;
+  }
+
+  .quick-link-item:hover {
+    background: var(--blue-light);
+    text-decoration: none;
+  }
+
+  @media (max-width: 860px) {
+    .admin-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 600px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+</style>
+{% endblock %}

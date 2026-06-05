@@ -1,0 +1,524 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Visit Detail — AfyaLink{% endblock %}
+
+{% block nav_visit_history %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Visit record — {{ visit.date|date:"j F Y" }}</h1>
+    <p>
+      {{ visit.facility.name }}
+      {% if visit.doctor %}&mdash; Dr. {{ visit.doctor.get_full_name }}{% endif %}
+      &mdash;
+      <span class="badge
+        {% if visit.status == 'complete' %}badge-green
+        {% elif visit.status == 'in_progress' %}badge-blue
+        {% else %}badge-gray{% endif %}">
+        {{ visit.get_status_display }}
+      </span>
+    </p>
+  </div>
+  <a href="{% url 'patient_visit_history' %}" class="btn btn-secondary">Back to history</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="detail-layout">
+<div class="detail-main">
+
+  <!-- ── PRE-ARRIVAL SYMPTOMS ── -->
+  {% if visit.symptom_entry %}
+  <div class="card">
+    <p class="card-title">Symptoms entered before visit</p>
+    <div class="detail-grid">
+      <div class="detail-item">
+        <p class="detail-label">Affected area</p>
+        <p class="detail-value">{{ visit.symptom_entry.body_part|title }}</p>
+      </div>
+      <div class="detail-item">
+        <p class="detail-label">Severity</p>
+        <p class="detail-value severity-{{ visit.symptom_entry.severity }}">
+          {{ visit.symptom_entry.severity|title }}
+        </p>
+      </div>
+      <div class="detail-item">
+        <p class="detail-label">Duration</p>
+        <p class="detail-value">
+          {{ visit.symptom_entry.duration_value }} {{ visit.symptom_entry.duration_unit }}
+        </p>
+      </div>
+      <div class="detail-item">
+        <p class="detail-label">Temperature reported</p>
+        <p class="detail-value">{{ visit.symptom_entry.temperature|default:"Not provided" }}</p>
+      </div>
+    </div>
+    <div class="detail-item full-width mt-8">
+      <p class="detail-label">Description</p>
+      <p class="detail-value">{{ visit.symptom_entry.symptoms }}</p>
+    </div>
+    {% if visit.symptom_entry.current_medications %}
+    <div class="detail-item full-width mt-8">
+      <p class="detail-label">Medications at time of visit</p>
+      <p class="detail-value">{{ visit.symptom_entry.current_medications }}</p>
+    </div>
+    {% endif %}
+    {% if visit.symptom_entry.known_allergies %}
+    <div class="detail-item full-width mt-8">
+      <p class="detail-label">Known allergies</p>
+      <p class="detail-value allergy-value">{{ visit.symptom_entry.known_allergies }}</p>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+
+  <!-- ── TRIAGE / VITALS ── -->
+  {% if visit.vitals %}
+  <div class="card">
+    <p class="card-title">
+      Triage &amp; vitals
+      <span class="card-title-sub">Recorded by {{ visit.vitals.recorded_by.get_full_name|default:"Nurse" }}</span>
+    </p>
+    <div class="vitals-grid">
+      <div class="vital-box">
+        <p class="vital-label">Blood pressure</p>
+        <p class="vital-value">{{ visit.vitals.blood_pressure|default:"—" }}</p>
+        <p class="vital-unit">mmHg</p>
+      </div>
+      <div class="vital-box">
+        <p class="vital-label">Temperature</p>
+        <p class="vital-value">{{ visit.vitals.temperature|default:"—" }}</p>
+        <p class="vital-unit">°C</p>
+      </div>
+      <div class="vital-box">
+        <p class="vital-label">Pulse</p>
+        <p class="vital-value">{{ visit.vitals.pulse|default:"—" }}</p>
+        <p class="vital-unit">bpm</p>
+      </div>
+      <div class="vital-box">
+        <p class="vital-label">Oxygen sat.</p>
+        <p class="vital-value">{{ visit.vitals.oxygen_saturation|default:"—" }}</p>
+        <p class="vital-unit">%</p>
+      </div>
+      <div class="vital-box">
+        <p class="vital-label">Weight</p>
+        <p class="vital-value">{{ visit.vitals.weight|default:"—" }}</p>
+        <p class="vital-unit">kg</p>
+      </div>
+      <div class="vital-box">
+        <p class="vital-label">Priority</p>
+        <p class="vital-value priority-{{ visit.vitals.priority }}">
+          {{ visit.vitals.priority|title }}
+        </p>
+        <p class="vital-unit">&nbsp;</p>
+      </div>
+    </div>
+    {% if visit.vitals.nurse_notes %}
+    <div class="mt-16">
+      <p class="detail-label">Nurse notes</p>
+      <p class="detail-value">{{ visit.vitals.nurse_notes }}</p>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+
+  <!-- ── DOCTOR CONSULTATION ── -->
+  {% if visit.consultation %}
+  <div class="card">
+    <p class="card-title">
+      Doctor's consultation
+      <span class="card-title-sub">Dr. {{ visit.doctor.get_full_name|default:"—" }}</span>
+    </p>
+    <div class="detail-grid">
+      <div class="detail-item full-width">
+        <p class="detail-label">Clinical findings</p>
+        <p class="detail-value">{{ visit.consultation.clinical_findings|default:"Not recorded" }}</p>
+      </div>
+      <div class="detail-item full-width mt-8">
+        <p class="detail-label">Diagnosis</p>
+        <p class="detail-value diagnosis-value">{{ visit.consultation.diagnosis|default:"Pending" }}</p>
+      </div>
+      <div class="detail-item full-width mt-8">
+        <p class="detail-label">Treatment plan</p>
+        <p class="detail-value">{{ visit.consultation.treatment_plan|default:"Not recorded" }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+
+  <!-- ── LAB RESULTS ── -->
+  {% if visit.lab_results.exists %}
+  <div class="card">
+    <p class="card-title">Laboratory results</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Test</th>
+            <th>Result</th>
+            <th>Normal range</th>
+            <th>Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for result in visit.lab_results.all %}
+          <tr>
+            <td>{{ result.test_name }}</td>
+            <td>
+              {% if result.result_value %}
+                <strong>{{ result.result_value }} {{ result.unit }}</strong>
+              {% else %}
+                <span class="text-muted">Pending</span>
+              {% endif %}
+            </td>
+            <td>{{ result.normal_range|default:"—" }}</td>
+            <td>
+              {% if result.date_resulted %}
+                {{ result.date_resulted|date:"j M Y" }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge
+                {% if result.status == 'ready' %}badge-green
+                {% elif result.status == 'pending' %}badge-amber
+                {% elif result.status == 'abnormal' %}badge-red
+                {% else %}badge-gray{% endif %}">
+                {{ result.get_status_display }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+
+  <!-- ── PRESCRIPTIONS ── -->
+  {% if visit.prescriptions.exists %}
+  <div class="card">
+    <p class="card-title">Drugs prescribed &amp; dispensed</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Drug</th>
+            <th>Dosage</th>
+            <th>Frequency</th>
+            <th>Duration</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prescription in visit.prescriptions.all %}
+          <tr>
+            <td>{{ prescription.drug_name }}</td>
+            <td>{{ prescription.dosage }}</td>
+            <td>{{ prescription.frequency }}</td>
+            <td>{{ prescription.duration }}</td>
+            <td>
+              <span class="badge
+                {% if prescription.dispensed %}badge-green
+                {% else %}badge-amber{% endif %}">
+                {% if prescription.dispensed %}Dispensed{% else %}Pending{% endif %}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+
+  <!-- ── REFERRAL ── -->
+  {% if visit.referral %}
+  <div class="card referral-card">
+    <p class="card-title">Referral</p>
+    <div class="detail-grid">
+      <div class="detail-item">
+        <p class="detail-label">Referred to</p>
+        <p class="detail-value">{{ visit.referral.referred_to.name }}</p>
+      </div>
+      <div class="detail-item">
+        <p class="detail-label">Date of referral</p>
+        <p class="detail-value">{{ visit.referral.date|date:"j M Y" }}</p>
+      </div>
+      <div class="detail-item full-width mt-8">
+        <p class="detail-label">Reason for referral</p>
+        <p class="detail-value">{{ visit.referral.reason }}</p>
+      </div>
+      <div class="detail-item">
+        <p class="detail-label">Status</p>
+        <p class="detail-value">
+          <span class="badge
+            {% if visit.referral.status == 'received' %}badge-green
+            {% else %}badge-amber{% endif %}">
+            {{ visit.referral.get_status_display }}
+          </span>
+        </p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+
+<!-- ── RIGHT: INVOICE SIDEBAR ── -->
+<aside class="detail-aside">
+
+  <div class="card">
+    <p class="card-title">Invoice summary</p>
+
+    {% if visit.invoice %}
+      <table class="invoice-table">
+        <tbody>
+          {% if visit.invoice.consultation_fee %}
+          <tr>
+            <td>Consultation</td>
+            <td class="text-right">KES {{ visit.invoice.consultation_fee|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if visit.invoice.lab_fee %}
+          <tr>
+            <td>Laboratory</td>
+            <td class="text-right">KES {{ visit.invoice.lab_fee|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if visit.invoice.pharmacy_fee %}
+          <tr>
+            <td>Pharmacy</td>
+            <td class="text-right">KES {{ visit.invoice.pharmacy_fee|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if visit.invoice.other_fee %}
+          <tr>
+            <td>Other charges</td>
+            <td class="text-right">KES {{ visit.invoice.other_fee|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+        <tfoot>
+          <tr class="invoice-total">
+            <td>Total</td>
+            <td class="text-right">KES {{ visit.invoice.total_cost|floatformat:2 }}</td>
+          </tr>
+          <tr>
+            <td>Payment status</td>
+            <td class="text-right">
+              <span class="badge
+                {% if visit.invoice.paid %}badge-green{% else %}badge-amber{% endif %}">
+                {% if visit.invoice.paid %}Paid{% else %}Unpaid{% endif %}
+              </span>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    {% else %}
+      <p class="text-muted">Invoice not yet generated.</p>
+    {% endif %}
+  </div>
+
+  <!-- Visit meta -->
+  <div class="card">
+    <p class="card-title">Visit details</p>
+    <table class="invoice-table">
+      <tbody>
+        <tr>
+          <td>Visit date</td>
+          <td class="text-right">{{ visit.date|date:"j M Y" }}</td>
+        </tr>
+        <tr>
+          <td>Check-in time</td>
+          <td class="text-right">{{ visit.check_in_time|time:"H:i"|default:"—" }}</td>
+        </tr>
+        <tr>
+          <td>Check-out time</td>
+          <td class="text-right">{{ visit.check_out_time|time:"H:i"|default:"—" }}</td>
+        </tr>
+        <tr>
+          <td>Facility</td>
+          <td class="text-right">{{ visit.facility.name }}</td>
+        </tr>
+        <tr>
+          <td>Visit ID</td>
+          <td class="text-right text-muted">#{{ visit.id }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <a href="{% url 'patient_visit_history' %}" class="btn btn-secondary" style="width:100%;text-align:center;display:block;">
+    Back to all visits
+  </a>
+
+</aside>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  /* Two-column layout */
+  .detail-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .detail-main { min-width: 0; }
+
+  /* Detail grid inside cards */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 24px;
+  }
+
+  .detail-item { }
+  .detail-item.full-width { grid-column: 1 / -1; }
+
+  .detail-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    margin-bottom: 3px;
+  }
+
+  .detail-value {
+    font-size: 14px;
+    color: var(--gray-700);
+    line-height: 1.5;
+  }
+
+  .diagnosis-value {
+    font-family: Georgia, serif;
+    font-size: 15px;
+    color: var(--blue-dark);
+    font-weight: bold;
+  }
+
+  .allergy-value {
+    color: var(--red);
+    font-weight: bold;
+  }
+
+  .severity-critical { color: var(--red); font-weight: bold; }
+  .severity-severe   { color: #d97706; font-weight: bold; }
+  .severity-moderate { color: var(--gray-700); }
+  .severity-mild     { color: var(--green); }
+
+  /* Card title sub-label */
+  .card-title-sub {
+    font-size: 11px;
+    font-weight: normal;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  /* Vitals grid */
+  .vitals-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .vital-box {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    text-align: center;
+  }
+
+  .vital-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    margin-bottom: 4px;
+  }
+
+  .vital-value {
+    font-size: 22px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    line-height: 1.2;
+  }
+
+  .vital-unit {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    margin-top: 2px;
+  }
+
+  .priority-high   .vital-value { color: var(--red); }
+  .priority-medium .vital-value { color: #d97706; }
+  .priority-low    .vital-value { color: var(--green); }
+
+  /* Referral card */
+  .referral-card {
+    border-left: 3px solid var(--blue);
+  }
+
+  /* Invoice table */
+  .invoice-table {
+    width: 100%;
+    font-size: 13px;
+  }
+
+  .invoice-table td {
+    padding: 7px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    vertical-align: middle;
+  }
+
+  .invoice-table tbody tr:last-child td { border-bottom: none; }
+
+  .invoice-total td {
+    font-weight: bold;
+    font-family: Georgia, serif;
+    font-size: 15px;
+    color: var(--blue-dark);
+    padding-top: 10px;
+    border-top: 2px solid var(--gray-300);
+    border-bottom: none;
+  }
+
+  @media (max-width: 860px) {
+    .detail-layout { grid-template-columns: 1fr; }
+    .detail-aside { order: -1; }
+    .vitals-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 560px) {
+    .detail-grid { grid-template-columns: 1fr; }
+    .vitals-grid { grid-template-columns: repeat(2, 1fr); }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}

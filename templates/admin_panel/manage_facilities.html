@@ -1,0 +1,334 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Manage Facilities — AfyaLink{% endblock %}
+
+{% block nav_manage_facilities %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Manage facilities</h1>
+    <p>Add, edit or deactivate health facilities in the AfyaLink network.</p>
+  </div>
+  <a href="{% url 'admin_panel_dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="manage-layout">
+
+  <!-- LEFT: Add new facility form -->
+  <div class="card">
+    <p class="card-title">Add new facility</p>
+
+    <form method="POST" action="{% url 'admin_panel_manage_facilities' %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add" />
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="name">Facility name</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            placeholder="e.g. Suneka Health Centre"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="level">Facility level</label>
+          <select id="level" name="level" required>
+            <option value="2">Level 2 — Dispensary</option>
+            <option value="3" selected>Level 3 — Health centre</option>
+            <option value="4">Level 4 — Sub-county hospital</option>
+            <option value="5">Level 5 — County hospital</option>
+            <option value="6">Level 6 — Referral hospital</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="sub_county">Sub-county</label>
+          <input
+            type="text"
+            id="sub_county"
+            name="sub_county"
+            placeholder="e.g. Kitutu Chache South"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="county">County</label>
+          <input
+            type="text"
+            id="county"
+            name="county"
+            value="Kisii"
+            required
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="address">Physical address</label>
+        <input
+          type="text"
+          id="address"
+          name="address"
+          placeholder="e.g. Off Kisii-Migori Road, Suneka Town"
+        />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="phone">Phone number</label>
+          <input
+            type="text"
+            id="phone"
+            name="phone"
+            placeholder="e.g. 0720 123 456"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="emergency_contact">Emergency contact</label>
+          <input
+            type="text"
+            id="emergency_contact"
+            name="emergency_contact"
+            placeholder="For alarm SMS alerts"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="latitude">GPS latitude</label>
+          <input
+            type="text"
+            id="latitude"
+            name="latitude"
+            placeholder="e.g. -0.681700"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="longitude">GPS longitude</label>
+          <input
+            type="text"
+            id="longitude"
+            name="longitude"
+            placeholder="e.g. 34.766700"
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="operating_hours">Operating hours</label>
+        <input
+          type="text"
+          id="operating_hours"
+          name="operating_hours"
+          placeholder="e.g. Mon-Fri 8am-5pm, Sat 8am-1pm"
+          value="Mon-Fri 8am-5pm"
+        />
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Add facility</button>
+      </div>
+
+    </form>
+  </div>
+
+
+  <!-- RIGHT: Existing facilities list -->
+  <div class="facilities-list-col">
+    <div class="card">
+      <p class="card-title">
+        All facilities
+        <span class="record-count">{{ facilities|length }} total</span>
+      </p>
+
+      <div class="mb-12">
+        <input
+          type="text"
+          id="facility-search"
+          placeholder="Filter facilities..."
+          class="search-input"
+        />
+      </div>
+
+      {% if facilities %}
+        <div class="facilities-list" id="facilities-list">
+          {% for facility in facilities %}
+          <div class="facility-item" data-name="{{ facility.name|lower }}">
+            <div class="facility-item-head">
+              <div>
+                <p class="facility-item-name">{{ facility.name }}</p>
+                <p class="facility-item-meta text-muted">
+                  Level {{ facility.level }}
+                  &mdash; {{ facility.sub_county }}
+                  {% if facility.phone %}&mdash; {{ facility.phone }}{% endif %}
+                </p>
+              </div>
+              <div class="facility-item-badges">
+                <span class="badge
+                  {% if facility.drug_status == 'available' %}badge-green
+                  {% elif facility.drug_status == 'low' %}badge-amber
+                  {% else %}badge-red{% endif %}">
+                  {{ facility.drug_status|title }}
+                </span>
+                <span class="badge {% if facility.is_active %}badge-green{% else %}badge-gray{% endif %}">
+                  {% if facility.is_active %}Active{% else %}Inactive{% endif %}
+                </span>
+              </div>
+            </div>
+
+            {% if facility.address %}
+              <p class="facility-item-address text-muted">{{ facility.address }}</p>
+            {% endif %}
+
+            <div class="facility-item-actions">
+              <form method="POST" action="{% url 'admin_panel_manage_facilities' %}"
+                    style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="action"      value="toggle" />
+                <input type="hidden" name="facility_id" value="{{ facility.id }}" />
+                <button type="submit" class="btn btn-secondary btn-sm">
+                  {% if facility.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+              </form>
+
+              <a href="/admin/core/facility/{{ facility.id }}/change/"
+                 class="btn btn-secondary btn-sm">
+                Edit in admin
+              </a>
+            </div>
+          </div>
+          {% if not forloop.last %}<hr class="item-divider">{% endif %}
+          {% endfor %}
+        </div>
+
+      {% else %}
+        <div class="empty-state">
+          <p class="empty-title">No facilities yet</p>
+          <p class="text-muted">Add the first facility using the form.</p>
+        </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .manage-layout {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: Georgia, serif;
+  }
+
+  .search-input:focus { outline: none; border-color: var(--blue); }
+
+  .facilities-list { display: flex; flex-direction: column; }
+
+  .facility-item { padding: 12px 0; }
+
+  .facility-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .facility-item-name {
+    font-size: 14px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 2px;
+  }
+
+  .facility-item-meta { font-size: 12px; font-family: Arial, sans-serif; }
+
+  .facility-item-badges { display: flex; gap: 6px; flex-shrink: 0; }
+
+  .facility-item-address {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-bottom: 8px;
+  }
+
+  .facility-item-actions { display: flex; gap: 8px; }
+
+  .item-divider { border: none; border-top: 1px solid var(--gray-200); margin: 4px 0; }
+
+  .empty-state { padding: 32px 20px; text-align: center; }
+  .empty-title { font-size: 15px; font-family: Georgia, serif; color: var(--gray-700); margin-bottom: 8px; }
+
+  @media (max-width: 960px) {
+    .manage-layout { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 560px) {
+    .form-row { grid-template-columns: 1fr; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  document.getElementById('facility-search').addEventListener('input', function () {
+    var q = this.value.toLowerCase().trim();
+    document.querySelectorAll('.facility-item').forEach(function (item) {
+      item.style.display = item.getAttribute('data-name').includes(q) ? '' : 'none';
+    });
+  });
+</script>
+{% endblock %}

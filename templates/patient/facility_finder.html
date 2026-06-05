@@ -1,0 +1,695 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Find a Facility — AfyaLink{% endblock %}
+
+{% block nav_facility_finder %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Find a health facility</h1>
+  <p>Locate nearby clinics, check available services and drug availability before you travel.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="finder-layout">
+
+  <!-- ── LEFT: Search + Results ── -->
+  <div class="finder-main">
+
+    <!-- Search & filter bar -->
+    <div class="card filter-card">
+      <form method="GET" action="{% url 'patient_facility_finder' %}" id="finder-form">
+        <div class="filter-row">
+
+          <div class="filter-group filter-grow">
+            <label for="search">Search by name or area</label>
+            <input
+              type="text"
+              id="search"
+              name="q"
+              value="{{ request.GET.q|default:'' }}"
+              placeholder="e.g. Kisii, Suneka, Ogembo"
+            />
+          </div>
+
+          <div class="filter-group">
+            <label for="service_type">Service</label>
+            <select id="service_type" name="service">
+              <option value="">All services</option>
+              <option value="outpatient"   {% if request.GET.service == 'outpatient' %}selected{% endif %}>Outpatient</option>
+              <option value="maternity"    {% if request.GET.service == 'maternity' %}selected{% endif %}>Maternity</option>
+              <option value="laboratory"   {% if request.GET.service == 'laboratory' %}selected{% endif %}>Laboratory</option>
+              <option value="pharmacy"     {% if request.GET.service == 'pharmacy' %}selected{% endif %}>Pharmacy</option>
+              <option value="emergency"    {% if request.GET.service == 'emergency' %}selected{% endif %}>Emergency / 24hr</option>
+              <option value="vaccination"  {% if request.GET.service == 'vaccination' %}selected{% endif %}>Vaccination / MCH</option>
+              <option value="dental"       {% if request.GET.service == 'dental' %}selected{% endif %}>Dental</option>
+              <option value="eye"          {% if request.GET.service == 'eye' %}selected{% endif %}>Eye clinic</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="level">Facility level</label>
+            <select id="level" name="level">
+              <option value="">All levels</option>
+              <option value="1" {% if request.GET.level == '1' %}selected{% endif %}>Level 1 — Community</option>
+              <option value="2" {% if request.GET.level == '2' %}selected{% endif %}>Level 2 — Dispensary</option>
+              <option value="3" {% if request.GET.level == '3' %}selected{% endif %}>Level 3 — Health centre</option>
+              <option value="4" {% if request.GET.level == '4' %}selected{% endif %}>Level 4 — Sub-county hospital</option>
+              <option value="5" {% if request.GET.level == '5' %}selected{% endif %}>Level 5 — County hospital</option>
+              <option value="6" {% if request.GET.level == '6' %}selected{% endif %}>Level 6 — Referral hospital</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="drugs_available">Drug availability</label>
+            <select id="drugs_available" name="drugs">
+              <option value="">Any</option>
+              <option value="yes" {% if request.GET.drugs == 'yes' %}selected{% endif %}>Drugs available</option>
+              <option value="low" {% if request.GET.drugs == 'low' %}selected{% endif %}>Low stock</option>
+              <option value="no"  {% if request.GET.drugs == 'no' %}selected{% endif %}>Out of stock</option>
+            </select>
+          </div>
+
+          <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Search</button>
+            <a href="{% url 'patient_facility_finder' %}" class="btn btn-secondary btn-sm">Clear</a>
+          </div>
+
+        </div>
+      </form>
+    </div>
+
+    <!-- Use my location -->
+    <div class="location-bar">
+      <button type="button" class="btn btn-secondary btn-sm" id="use-location-btn">
+        Use my current location
+      </button>
+      <span class="text-muted" id="location-status"></span>
+    </div>
+
+    <div id="external-results-section" class="external-results hidden">
+      <div class="external-results-header">
+        <h2>Nearby hospitals from OpenStreetMap</h2>
+        <span id="external-results-count" class="text-muted"></span>
+      </div>
+      <div id="external-results-list"></div>
+    </div>
+
+    <!-- Results list -->
+    {% if facilities %}
+      <p class="results-count">
+        {{ facilities|length }} facilit{{ facilities|length|pluralize:"y,ies" }} found
+        {% if request.GET.q %}for &ldquo;{{ request.GET.q }}&rdquo;{% endif %}
+      </p>
+
+      {% for facility in facilities %}
+      <div class="facility-card {% if facility.id == request.user.profile.facility.id %}facility-card-mine{% endif %}"
+           data-lat="{{ facility.latitude }}"
+           data-lng="{{ facility.longitude }}"
+           data-name="{{ facility.name }}"
+           onclick="highlightMarker({{ facility.id }})">
+
+        <div class="facility-card-head">
+          <div>
+            <p class="facility-name">
+              {{ facility.name }}
+              {% if facility.id == request.user.profile.facility.id %}
+                <span class="badge badge-blue">Your facility</span>
+              {% endif %}
+            </p>
+            <p class="facility-meta">
+              Level {{ facility.level }} &mdash; {{ facility.sub_county }}
+              {% if facility.distance_km %}
+                &mdash; {{ facility.distance_km|floatformat:1 }} km away
+              {% endif %}
+            </p>
+          </div>
+          <div class="facility-stock-badge">
+            {% if facility.drug_status == 'available' %}
+              <span class="badge badge-green">Drugs available</span>
+            {% elif facility.drug_status == 'low' %}
+              <span class="badge badge-amber">Low stock</span>
+            {% elif facility.drug_status == 'out' %}
+              <span class="badge badge-red">Out of stock</span>
+            {% else %}
+              <span class="badge badge-gray">Stock unknown</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="facility-details">
+          <div class="facility-info-row">
+            <span class="detail-label">Address</span>
+            <span>{{ facility.address|default:"Not provided" }}</span>
+          </div>
+          <div class="facility-info-row">
+            <span class="detail-label">Hours</span>
+            <span>{{ facility.operating_hours|default:"Not specified" }}</span>
+          </div>
+          <div class="facility-info-row">
+            <span class="detail-label">Phone</span>
+            <span>{{ facility.phone|default:"Not available" }}</span>
+          </div>
+          {% if facility.services %}
+          <div class="facility-info-row">
+            <span class="detail-label">Services</span>
+            <span>
+              {% for service in facility.services.all %}
+                <span class="service-tag">{{ service.name }}</span>
+              {% endfor %}
+            </span>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="facility-card-actions">
+          <a href="https://www.google.com/maps/dir/?api=1&destination={{ facility.latitude }},{{ facility.longitude }}"
+             target="_blank"
+             class="btn btn-primary btn-sm"
+             onclick="event.stopPropagation()">
+            Get directions
+          </a>
+          {% if facility.id != request.user.profile.facility.id %}
+            <form method="POST" action="{% url 'patient_change_facility' %}" style="display:inline;" onclick="event.stopPropagation()">
+              {% csrf_token %}
+              <input type="hidden" name="facility_id" value="{{ facility.id }}" />
+              <button type="submit" class="btn btn-secondary btn-sm">Set as my facility</button>
+            </form>
+          {% endif %}
+          <a href="#map" class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); centerMap({{ facility.latitude }}, {{ facility.longitude }}, '{{ facility.name }}')">
+            View on map
+          </a>
+        </div>
+
+      </div>
+      {% endfor %}
+
+    {% else %}
+      <div class="empty-state">
+        <p class="empty-title">No facilities found</p>
+        {% if request.GET.q or request.GET.service or request.GET.level %}
+          <p class="text-muted">
+            Try broadening your search.
+            <a href="{% url 'patient_facility_finder' %}">Clear all filters</a>
+          </p>
+        {% else %}
+          <p class="text-muted">No facilities are currently registered in the system.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+
+  </div>
+
+  <!-- ── RIGHT: Map ── -->
+  <div class="finder-map-col">
+    <div class="map-sticky">
+      <div id="map" class="map-container"></div>
+      <p class="map-hint">Click a facility card to highlight it on the map.</p>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .finder-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .finder-main { min-width: 0; }
+
+  /* Filter card */
+  .filter-card { padding: 16px 20px; margin-bottom: 12px; }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 130px;
+  }
+
+  .filter-grow { flex: 2; min-width: 180px; }
+
+  .filter-group label { font-size: 10px; margin-bottom: 0; }
+  .filter-group select, .filter-group input { font-size: 13px; padding: 7px 10px; }
+
+  .filter-actions {
+    display: flex;
+    gap: 8px;
+    padding-bottom: 1px;
+    flex-shrink: 0;
+  }
+
+  /* Location bar */
+  .location-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    font-size: 13px;
+  }
+
+  .external-results {
+    display: none;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .external-results.visible {
+    display: block;
+  }
+
+  .external-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .external-result-item {
+    border-top: 1px solid var(--gray-200);
+    padding: 12px 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .external-result-item:first-child {
+    border-top: none;
+  }
+
+  .external-detail {
+    margin: 0;
+    font-size: 12px;
+    color: var(--gray-600);
+  }
+
+  .external-result-item button {
+    width: fit-content;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* Results count */
+  .results-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    margin-bottom: 12px;
+  }
+
+  /* Facility card */
+  .facility-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .facility-card:hover {
+    border-color: var(--blue);
+  }
+
+  .facility-card-mine {
+    border-left: 3px solid var(--blue);
+  }
+
+  .facility-card.highlighted {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(26,92,168,0.15);
+  }
+
+  .facility-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .facility-name {
+    font-size: 14px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 3px;
+  }
+
+  .facility-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  .facility-details {
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .facility-info-row {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-700);
+    align-items: baseline;
+  }
+
+  .detail-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+    min-width: 58px;
+    flex-shrink: 0;
+  }
+
+  .service-tag {
+    display: inline-block;
+    font-size: 10px;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-300);
+    border-radius: 3px;
+    padding: 1px 6px;
+    margin: 1px 2px 1px 0;
+    color: var(--gray-700);
+  }
+
+  .facility-card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Empty state */
+  .empty-state {
+    padding: 40px 20px;
+    text-align: center;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+  }
+
+  .empty-title {
+    font-size: 15px;
+    font-family: Georgia, serif;
+    color: var(--gray-700);
+    margin-bottom: 8px;
+  }
+
+  /* Map */
+  .finder-map-col { min-width: 0; }
+
+  .map-sticky {
+    position: sticky;
+    top: calc(var(--topbar-h) + 20px);
+  }
+
+  .map-container {
+    width: 100%;
+    height: 520px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    background: var(--gray-100);
+  }
+
+  .map-hint {
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    text-align: center;
+    margin-top: 6px;
+  }
+
+  @media (max-width: 960px) {
+    .finder-layout { grid-template-columns: 1fr; }
+    .finder-map-col { order: -1; }
+    .map-container { height: 280px; }
+    .map-sticky { position: static; }
+  }
+
+  @media (max-width: 600px) {
+    .filter-row { flex-direction: column; }
+    .filter-group, .filter-grow { min-width: 100%; }
+    .filter-actions { width: 100%; }
+    .filter-actions .btn { flex: 1; text-align: center; }
+    .facility-card-head { flex-direction: column; gap: 6px; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  var map;
+  var markers = {};
+  var externalMarkers = [];
+  var facilitiesData = [
+    {% for facility in facilities %}
+    {
+      id: {{ facility.id }},
+      name: "{{ facility.name|escapejs }}",
+      lat: {{ facility.latitude|default:"0" }},
+      lng: {{ facility.longitude|default:"0" }},
+      level: "Level {{ facility.level }}",
+      status: "{{ facility.drug_status|default:'unknown' }}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  function getQueryParam(name) {
+    var params = new URLSearchParams(window.location.search);
+    return params.get(name);
+  }
+
+  function clearExternalMarkers() {
+    externalMarkers.forEach(function (marker) {
+      marker.setMap(null);
+    });
+    externalMarkers = [];
+  }
+
+  function addExternalMarker(hospital) {
+    if (!map || !hospital.latitude || !hospital.longitude) return;
+
+    var marker = new google.maps.Marker({
+      position: { lat: hospital.latitude, lng: hospital.longitude },
+      map: map,
+      title: hospital.name,
+      icon: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
+    });
+
+    var infoWindow = new google.maps.InfoWindow({
+      content:
+        '<div style="font-family:Arial,sans-serif;font-size:13px;max-width:240px;">' +
+        '<strong style="color:#134080;">' + hospital.name + '</strong><br>' +
+        '<span style="color:#6b7280;">' + (hospital.address || 'Hospital near you') + '</span><br>' +
+        '<span style="color:#475569;">' + hospital.distance_km + ' km away</span>' +
+        '</div>'
+    });
+
+    marker.addListener('click', function () {
+      infoWindow.open(map, marker);
+    });
+
+    externalMarkers.push(marker);
+  }
+
+  function renderExternalResults(hospitals) {
+    var section = document.getElementById('external-results-section');
+    var list = document.getElementById('external-results-list');
+    var count = document.getElementById('external-results-count');
+    if (!section || !list || !count) return;
+
+    list.innerHTML = '';
+    section.classList.remove('hidden');
+
+    if (!hospitals.length) {
+      section.classList.add('visible');
+      count.textContent = 'No nearby hospitals found.';
+      return;
+    }
+
+    hospitals.forEach(function (hospital) {
+      var item = document.createElement('div');
+      item.className = 'external-result-item';
+      item.innerHTML =
+        '<strong>' + hospital.name + '</strong>' +
+        '<p class="external-detail">' + (hospital.address || 'Address not available') + '</p>' +
+        '<p class="external-detail">' + hospital.distance_km + ' km away</p>' +
+        '<button class="btn btn-sm btn-secondary" type="button">View on map</button>';
+
+      item.querySelector('button').addEventListener('click', function () {
+        centerMap(hospital.latitude, hospital.longitude);
+      });
+
+      list.appendChild(item);
+    });
+
+    section.classList.add('visible');
+    count.textContent = hospitals.length + ' nearby hospital' + (hospitals.length === 1 ? '' : 's');
+  }
+
+  function fetchNearbyHospitals(lat, lng) {
+    var section = document.getElementById('external-results-section');
+    var count = document.getElementById('external-results-count');
+    if (section && count) {
+      section.classList.remove('hidden');
+      section.classList.add('visible');
+      count.textContent = 'Searching nearby hospitals...';
+    }
+    clearExternalMarkers();
+
+    fetch('/api/facilities/nearby/?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng) + '&radius=25000')
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        var hospitals = data.hospitals || [];
+        hospitals.forEach(addExternalMarker);
+        renderExternalResults(hospitals);
+      })
+      .catch(function () {
+        if (count) count.textContent = 'Unable to load nearby hospitals.';
+      });
+  }
+
+  function initMap() {
+    var defaultCenter = { lat: -0.6817, lng: 34.7667 }; // Kisii
+
+    map = new google.maps.Map(document.getElementById('map'), {
+      zoom: 11,
+      center: defaultCenter,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      styles: [
+        { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+      ]
+    });
+
+    facilitiesData.forEach(function (f) {
+      if (!f.lat || !f.lng) return;
+
+      var marker = new google.maps.Marker({
+        position: { lat: f.lat, lng: f.lng },
+        map: map,
+        title: f.name
+      });
+
+      var infoWindow = new google.maps.InfoWindow({
+        content:
+          '<div style="font-family:Arial,sans-serif;font-size:13px;max-width:200px;">' +
+          '<strong style="color:#134080;">' + f.name + '</strong><br>' +
+          '<span style="color:#6b7280;">' + f.level + '</span>' +
+          '</div>'
+      });
+
+      marker.addListener('click', function () {
+        infoWindow.open(map, marker);
+      });
+
+      markers[f.id] = { marker: marker, infoWindow: infoWindow };
+    });
+
+    var userLat = getQueryParam('lat');
+    var userLng = getQueryParam('lng');
+    if (userLat && userLng) {
+      fetchNearbyHospitals(userLat, userLng);
+    }
+  }
+
+  function highlightMarker(facilityId) {
+    if (!map || !markers[facilityId]) return;
+    var item = markers[facilityId];
+    map.panTo(item.marker.getPosition());
+    map.setZoom(14);
+    item.infoWindow.open(map, item.marker);
+    document.querySelectorAll('.facility-card').forEach(function (c) {
+      c.classList.remove('highlighted');
+    });
+    var card = document.querySelector('[onclick="highlightMarker(' + facilityId + ')"]');
+    if (card) card.classList.add('highlighted');
+  }
+
+  function centerMap(lat, lng) {
+    if (!map) return;
+    map.panTo({ lat: lat, lng: lng });
+    map.setZoom(14);
+  }
+
+  document.getElementById('use-location-btn').addEventListener('click', function () {
+    var status = document.getElementById('location-status');
+    if (!navigator.geolocation) {
+      status.textContent = 'Geolocation is not supported by your browser.';
+      return;
+    }
+    status.textContent = 'Locating...';
+    navigator.geolocation.getCurrentPosition(
+      function (position) {
+        var lat = position.coords.latitude;
+        var lng = position.coords.longitude;
+        status.textContent = '';
+        if (map) {
+          map.panTo({ lat: lat, lng: lng });
+          map.setZoom(13);
+          new google.maps.Marker({
+            position: { lat: lat, lng: lng },
+            map: map,
+            title: 'Your location',
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 7,
+              fillColor: '#1a5ca8',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 2
+            }
+          });
+        }
+        var form = document.getElementById('finder-form');
+        var latInput = document.createElement('input');
+        latInput.type = 'hidden'; latInput.name = 'lat'; latInput.value = lat;
+        var lngInput = document.createElement('input');
+        lngInput.type = 'hidden'; lngInput.name = 'lng'; lngInput.value = lng;
+        form.appendChild(latInput);
+        form.appendChild(lngInput);
+        form.submit();
+      },
+      function () {
+        status.textContent = 'Unable to retrieve your location.';
+      }
+    );
+  });
+</script>
+
+<!-- Google Maps JS — replace YOUR_API_KEY with actual key from settings -->
+<script
+  src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&callback=initMap"
+  async defer>
+</script>
+{% endblock %}

@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Drug Supervisor Dashboard — AfyaLink{% endblock %}
+
+{% block nav_supervisor_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Drug stock supervisor</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <a href="{% url 'supervisor_stock_entry' %}" class="btn btn-primary">Log new delivery</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STATS ── -->
+<div class="stat-grid">
+  <div class="stat-card green">
+    <p class="stat-label">Drugs in stock</p>
+    <p class="stat-value">{{ in_stock_count|default:"0" }}</p>
+  </div>
+  <div class="stat-card amber">
+    <p class="stat-label">Low stock</p>
+    <p class="stat-value">{{ low_stock_count|default:"0" }}</p>
+  </div>
+  <div class="stat-card red">
+    <p class="stat-label">Out of stock</p>
+    <p class="stat-value">{{ out_of_stock_count|default:"0" }}</p>
+  </div>
+  <div class="stat-card">
+    <p class="stat-label">Alerts sent today</p>
+    <p class="stat-value">{{ alerts_today|default:"0" }}</p>
+  </div>
+</div>
+
+
+<!-- ── CRITICAL ALERTS ── -->
+{% if out_of_stock_drugs %}
+<div class="alert-banner">
+  <p class="alert-banner-title">
+    {{ out_of_stock_drugs|length }} drug{{ out_of_stock_drugs|length|pluralize }} out of stock
+    — supplier alert has been sent
+  </p>
+  <div class="alert-drug-list">
+    {% for drug in out_of_stock_drugs %}
+    <div class="alert-drug-item">
+      <span class="alert-drug-name">{{ drug.drug_name }}</span>
+      <span class="badge badge-red">Out of stock</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+
+<!-- ── STOCK TABLE ── -->
+<div class="card">
+  <div class="flex-between mb-16">
+    <p class="card-title" style="margin-bottom:0;border:none;padding:0;">
+      Current stock levels
+      <span class="record-count">{{ stock_items|length }} drugs</span>
+    </p>
+    <div class="flex gap-8">
+      <input
+        type="text"
+        id="drug-search"
+        placeholder="Filter drug..."
+        class="stock-search-input"
+      />
+      <a href="{% url 'supervisor_stock_report' %}" class="btn btn-secondary btn-sm">
+        Full report
+      </a>
+    </div>
+  </div>
+
+  {% if stock_items %}
+  <div class="table-wrap">
+    <table id="stock-table">
+      <thead>
+        <tr>
+          <th>Drug name</th>
+          <th>Category</th>
+          <th>Delivered</th>
+          <th>Dispensed</th>
+          <th>Remaining</th>
+          <th>Unit</th>
+          <th>Days left (est.)</th>
+          <th>Status</th>
+          <th>Last updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in stock_items %}
+        <tr data-name="{{ item.drug_name|lower }}">
+          <td><p class="drug-name-cell">{{ item.drug_name }}</p></td>
+          <td>{{ item.category|default:"—" }}</td>
+          <td>{{ item.quantity_delivered }}</td>
+          <td>{{ item.quantity_dispensed }}</td>
+          <td>
+            <strong class="
+              {% if item.status == 'out' %}text-red
+              {% elif item.status == 'low' %}text-amber
+              {% else %}text-green{% endif %}">
+              {{ item.quantity_remaining }}
+            </strong>
+          </td>
+          <td>{{ item.unit }}</td>
+          <td>
+            {% if item.days_remaining %}
+              {% if item.days_remaining <= 3 %}
+                <span class="text-red font-bold">{{ item.days_remaining }} days</span>
+              {% elif item.days_remaining <= 7 %}
+                <span class="text-amber">{{ item.days_remaining }} days</span>
+              {% else %}
+                {{ item.days_remaining }} days
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge
+              {% if item.status == 'available' %}badge-green
+              {% elif item.status == 'low' %}badge-amber
+              {% else %}badge-red{% endif %}">
+              {{ item.status|title }}
+            </span>
+          </td>
+          <td class="text-muted" style="font-size:12px;">
+            {{ item.last_updated|date:"j M, H:i" }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-state">
+      <p class="empty-title">No stock data yet</p>
+      <p class="text-muted">
+        <a href="{% url 'supervisor_stock_entry' %}">Log the first drug delivery</a>
+        to start tracking.
+      </p>
+    </div>
+  {% endif %}
+</div>
+
+
+<!-- ── RECENT DELIVERIES ── -->
+<div class="card">
+  <p class="card-title">Recent deliveries</p>
+  {% if recent_deliveries %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Drug</th>
+          <th>Qty delivered</th>
+          <th>Supplier</th>
+          <th>Date</th>
+          <th>Logged by</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for delivery in recent_deliveries %}
+        <tr>
+          <td class="drug-name-cell">{{ delivery.drug_name }}</td>
+          <td>{{ delivery.quantity }} {{ delivery.unit }}</td>
+          <td>{{ delivery.supplier|default:"—" }}</td>
+          <td>{{ delivery.date|date:"j M Y" }}</td>
+          <td>{{ delivery.logged_by.get_full_name }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="text-muted">No deliveries recorded yet.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .stat-card.red { border-top-color: var(--red); }
+  .stat-card.red .stat-value { color: var(--red); }
+
+  .alert-banner {
+    background: var(--red-light);
+    border: 1px solid var(--red);
+    border-left: 4px solid var(--red);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 24px;
+  }
+
+  .alert-banner-title {
+    font-size: 12px;
+    font-weight: bold;
+    font-family: Arial, sans-serif;
+    color: var(--red);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+
+  .alert-drug-list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .alert-drug-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .alert-drug-name {
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+  }
+
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  .stock-search-input {
+    padding: 6px 10px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: Georgia, serif;
+    width: 160px;
+  }
+
+  .stock-search-input:focus { outline: none; border-color: var(--blue); }
+
+  .drug-name-cell {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .text-red   { color: var(--red); }
+  .text-amber { color: #d97706; }
+  .text-green { color: var(--green); }
+  .font-bold  { font-weight: bold; }
+
+  .empty-state { padding: 40px 20px; text-align: center; }
+  .empty-title { font-size: 15px; font-family: Georgia, serif; color: var(--gray-700); margin-bottom: 8px; }
+
+  @media (max-width: 600px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .stock-search-input { width: 100%; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  document.getElementById('drug-search').addEventListener('input', function () {
+    var q = this.value.toLowerCase().trim();
+    document.querySelectorAll('#stock-table tbody tr').forEach(function (row) {
+      row.style.display = row.getAttribute('data-name').includes(q) ? '' : 'none';
+    });
+  });
+</script>
+{% endblock %}

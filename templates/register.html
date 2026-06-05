@@ -1,0 +1,745 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Create Account — AfyaLink{% endblock %}
+
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --forest:   #14b8a6;
+    --forest-md:#0f766e;
+    --forest-lt:#d1fae5;
+    --cream:    #effdfa;
+    --warm:     #ecfdf5;
+    --amber:    #f59e0b;
+    --text:     #0f172a;
+    --muted:    #475569;
+    --border:   #d1fae5;
+    --white:    #ffffff;
+    --red:      #dc2626;
+    --radius:   14px;
+  }
+
+  .sidebar { display: none !important; }
+  .layout  { background: var(--cream); min-height: 100vh; padding: 0 !important; }
+  .main-content { max-width: none !important; padding: 0 !important; flex: 1; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Page shell ── */
+  .page {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── Left sidebar ── */
+  .reg-sidebar {
+    background: var(--forest);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 44px 36px;
+  }
+
+  .reg-sidebar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  .reg-sidebar::after {
+    content: '+';
+    position: absolute;
+    bottom: -60px; right: -50px;
+    font-size: 300px;
+    font-weight: 800;
+    color: rgba(255,255,255,0.04);
+    font-family: 'Playfair Display', serif;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .sb-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 48px;
+    position: relative;
+    z-index: 1;
+  }
+  .sb-mark {
+    width: 40px; height: 40px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    display: grid; place-items: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 20px; font-weight: 700;
+    color: #fff;
+  }
+  .sb-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 700;
+    color: #fff;
+  }
+
+  .sb-heading {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    color: #fff;
+    line-height: 1.3;
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 1;
+  }
+  .sb-heading em { font-style: italic; color: #7dd3b8; }
+
+  .sb-desc {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.7;
+    position: relative;
+    z-index: 1;
+    margin-bottom: 40px;
+  }
+
+  /* Step tracker */
+  .steps {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 12px 0;
+    position: relative;
+  }
+  .step-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 16px; top: 42px;
+    width: 1px; height: calc(100% - 12px);
+    background: rgba(255,255,255,0.15);
+  }
+  .step-dot {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.25);
+    display: grid; place-items: center;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 700;
+    color: rgba(255,255,255,0.5);
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+  .step-dot.active {
+    background: #7dd3b8;
+    border-color: #7dd3b8;
+    color: var(--forest);
+  }
+  .step-dot.done {
+    background: rgba(125,211,184,0.2);
+    border-color: #7dd3b8;
+    color: #7dd3b8;
+  }
+  .step-info { padding-top: 4px; }
+  .step-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600;
+    color: rgba(255,255,255,0.9);
+  }
+  .step-sub {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+  }
+
+  /* ── Main form area ── */
+  .reg-main {
+    background: var(--cream);
+    padding: 40px 48px 60px;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  .reg-main::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' fill='%23d6cbbf' fill-opacity='0.25'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  .reg-form-wrap {
+    max-width: 580px;
+    position: relative;
+    z-index: 1;
+    animation: fadeUp 0.45s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .reg-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px; font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .reg-sub {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 36px;
+    line-height: 1.6;
+  }
+
+  /* Messages */
+  .messages { margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .alert {
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    background: #fef2f2;
+    color: var(--red);
+    border: 1px solid #fecaca;
+  }
+
+  /* Role type selector — big cards */
+  .role-type-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .role-type-card {
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--white);
+    text-align: center;
+    position: relative;
+  }
+  .role-type-card input[type="radio"] { display: none; }
+  .role-type-card:has(input:checked) {
+    border-color: var(--forest-md);
+    background: var(--forest-lt);
+    box-shadow: 0 0 0 4px rgba(26,107,74,0.08);
+  }
+  .role-type-card:hover:not(:has(input:checked)) {
+    border-color: #b5d5c8;
+    background: #f7fcfa;
+  }
+  .role-type-card .check {
+    position: absolute;
+    top: 10px; right: 10px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--white);
+    transition: all 0.15s;
+  }
+  .role-type-card:has(input:checked) .check {
+    background: var(--forest-md);
+    border-color: var(--forest-md);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 10px;
+  }
+  .role-type-icon { font-size: 28px; margin-bottom: 8px; }
+  .role-type-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .role-type-desc {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  /* Section heading */
+  .section-head {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: var(--muted);
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+    margin-top: 28px;
+  }
+  .section-head:first-of-type { margin-top: 0; }
+
+  /* Form grid */
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .field.full { grid-column: 1 / -1; }
+
+  .field label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--muted);
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    padding: 12px 15px;
+    border: 1.5px solid var(--border);
+    border-radius: 11px;
+    background: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+  }
+  .field input:focus,
+  .field select:focus,
+  .field textarea:focus {
+    border-color: var(--forest-md);
+    box-shadow: 0 0 0 3px rgba(26,107,74,0.1);
+  }
+  .field select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 38px;
+    cursor: pointer;
+  }
+  .field-hint {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .field-hint a { color: var(--forest-md); text-decoration: none; font-weight: 600; }
+  .field-error {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: var(--red);
+  }
+
+  /* Staff-only section (hidden by default) */
+  #staff-section { display: none; }
+  #staff-section.visible { display: block; }
+
+  /* Facility cards grid */
+  .facility-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .facility-card {
+    border: 2px solid var(--border);
+    border-radius: 11px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.13s;
+    background: var(--white);
+  }
+  .facility-card input[type="radio"] { display: none; }
+  .facility-card:has(input:checked) {
+    border-color: var(--forest-md);
+    background: var(--forest-lt);
+  }
+  .facility-card:hover:not(:has(input:checked)) {
+    border-color: #b5d5c8;
+  }
+  .facility-name {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .facility-loc {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Facility search */
+  .facility-search {
+    width: 100%;
+    padding: 10px 14px 10px 38px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    background: var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 12px center;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    margin-bottom: 10px;
+    transition: border-color 0.15s;
+  }
+  .facility-search:focus {
+    border-color: var(--forest-md);
+    box-shadow: 0 0 0 3px rgba(26,107,74,0.1);
+  }
+
+  /* Submit */
+  .btn-submit {
+    width: 100%;
+    padding: 15px;
+    background: var(--forest);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 28px;
+    transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  }
+  .btn-submit:hover {
+    background: var(--forest-md);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(15,76,53,0.25);
+  }
+  .btn-submit .arrow { font-size: 18px; transition: transform 0.15s; }
+  .btn-submit:hover .arrow { transform: translateX(4px); }
+
+  .form-footer-note {
+    text-align: center;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 20px;
+  }
+  .form-footer-note a {
+    color: var(--forest-md);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .page { grid-template-columns: 1fr; }
+    .reg-sidebar {
+      position: static;
+      height: auto;
+      padding: 28px 24px;
+    }
+    .reg-sidebar::after { display: none; }
+    .sb-heading { font-size: 22px; }
+    .sb-desc, .steps { display: none; }
+    .reg-main { padding: 28px 20px 48px; }
+    .form-row { grid-template-columns: 1fr; }
+    .role-type-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 480px) {
+    .role-type-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- Sidebar -->
+  <div class="reg-sidebar">
+    <div class="sb-logo">
+      <div class="sb-mark">+</div>
+      <div class="sb-name">AfyaLink</div>
+    </div>
+
+    <div class="sb-heading">
+      Join Kenya's<br><em>smart health</em><br>network.
+    </div>
+    <div class="sb-desc">
+      Create your account in minutes. Patients get a personal health portal. Medical staff get role-based clinical access.
+    </div>
+
+    <div class="steps">
+      <div class="step-item">
+        <div class="step-dot active" id="dot-1">1</div>
+        <div class="step-info">
+          <div class="step-label">Account type</div>
+          <div class="step-sub">Patient or medical staff</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-dot" id="dot-2">2</div>
+        <div class="step-info">
+          <div class="step-label">Personal details</div>
+          <div class="step-sub">Name, DOB, contact info</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-dot" id="dot-3">3</div>
+        <div class="step-info">
+          <div class="step-label">Facility &amp; credentials</div>
+          <div class="step-sub">Your health facility</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-dot" id="dot-4">4</div>
+        <div class="step-info">
+          <div class="step-label">Done</div>
+          <div class="step-sub">Access your dashboard</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main form -->
+  <div class="reg-main">
+    <div class="reg-form-wrap">
+
+      <div class="reg-title">Create account</div>
+      <div class="reg-sub">Who are you creating an account for?</div>
+
+      {% if messages %}
+        <div class="messages">
+          {% for message in messages %}
+            <div class="alert">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="POST" action="{% url 'register' %}" id="reg-form">
+        {% csrf_token %}
+
+        <!-- ── Step 1: Account type ── -->
+        <div class="role-type-grid">
+          <label class="role-type-card">
+            <input type="radio" name="account_type" value="patient" id="type-patient" {% if selected_account_type != 'staff' %}checked{% endif %} onchange="handleTypeChange()" />
+            <div class="check"></div>
+            <div class="role-type-icon"></div>
+            <div class="role-type-label">I'm a Patient</div>
+            <div class="role-type-desc">Access your personal health records & appointments</div>
+          </label>
+          <label class="role-type-card">
+            <input type="radio" name="account_type" value="staff" id="type-staff" {% if selected_account_type == 'staff' %}checked{% endif %} onchange="handleTypeChange()" />
+            <div class="check"></div>
+            <div class="role-type-icon"></div>
+            <div class="role-type-label">I'm Medical Staff</div>
+            <div class="role-type-desc">Doctor, nurse, receptionist, lab tech, pharmacist…</div>
+          </label>
+        </div>
+
+        <!-- Staff-only: role + facility -->
+        <div id="staff-section" class="{% if selected_account_type == 'staff' %}visible{% endif %}">
+          <div class="section-head">Staff details</div>
+          <div class="form-row">
+            <div class="field">
+              <label for="staff_role">Your role *</label>
+              <select id="staff_role" name="staff_role">
+                <option value="">— Select role —</option>
+                <option value="doctor" {% if selected_staff_role == 'doctor' %}selected{% endif %}>Doctor</option>
+                <option value="nurse" {% if selected_staff_role == 'nurse' %}selected{% endif %}>Nurse</option>
+                <option value="reception" {% if selected_staff_role == 'reception' %}selected{% endif %}>Reception</option>
+                <option value="lab" {% if selected_staff_role == 'lab' %}selected{% endif %}>Lab Technician</option>
+                <option value="pharmacy" {% if selected_staff_role == 'pharmacy' %}selected{% endif %}>Pharmacy</option>
+                <option value="billing" {% if selected_staff_role == 'billing' %}selected{% endif %}>Billing Officer</option>
+                <option value="supervisor" {% if selected_staff_role == 'supervisor' %}selected{% endif %}>Supervisor / Manager</option>
+                <option value="admin" {% if selected_staff_role == 'admin' %}selected{% endif %}>System Administrator</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="staff_id">Staff / Licence No.</label>
+              <input type="text" id="staff_id" name="staff_id"
+                     value="{{ request.POST.staff_id|default:'' }}"
+                     placeholder="e.g. KMC/12345" />
+              <div class="field-hint">Kenya Medical Council or equivalent registration number.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Step 2: Personal details ── -->
+        <div class="section-head">Personal details</div>
+        <div class="form-row">
+          <div class="field">
+            <label for="first_name">First name *</label>
+            <input type="text" id="first_name" name="first_name"
+                   value="{{ form.first_name.value|default:'' }}"
+                   placeholder="e.g. Mary" required />
+            {% if form.first_name.errors %}<div class="field-error">{{ form.first_name.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="field">
+            <label for="last_name">Last name *</label>
+            <input type="text" id="last_name" name="last_name"
+                   value="{{ form.last_name.value|default:'' }}"
+                   placeholder="e.g. Otieno" required />
+            {% if form.last_name.errors %}<div class="field-error">{{ form.last_name.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="date_of_birth">Date of birth *</label>
+            <input type="date" id="date_of_birth" name="date_of_birth"
+                   value="{{ form.date_of_birth.value|default:'' }}" required />
+            {% if form.date_of_birth.errors %}<div class="field-error">{{ form.date_of_birth.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="field">
+            <label for="gender">Gender *</label>
+            <select id="gender" name="gender" required>
+              <option value="" disabled {% if not form.gender.value %}selected{% endif %}>Select</option>
+              <option value="male"   {% if form.gender.value == 'male' %}selected{% endif %}>Male</option>
+              <option value="female" {% if form.gender.value == 'female' %}selected{% endif %}>Female</option>
+              <option value="other"  {% if form.gender.value == 'other' %}selected{% endif %}>Other</option>
+            </select>
+            {% if form.gender.errors %}<div class="field-error">{{ form.gender.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="phone_number">Phone number *</label>
+            <input type="tel" id="phone_number" name="phone_number"
+                   value="{{ form.phone_number.value|default:'' }}"
+                   placeholder="e.g. 0712 345 678" required />
+            <div class="field-hint">Used for SMS reminders and alerts.</div>
+            {% if form.phone_number.errors %}<div class="field-error">{{ form.phone_number.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="field">
+            <label for="id_number">National ID / Birth cert.</label>
+            <input type="text" id="id_number" name="id_number"
+                   value="{{ form.id_number.value|default:'' }}"
+                   placeholder="e.g. 35678901" />
+            <div class="field-hint">Optional — helps verify identity.</div>
+            {% if form.id_number.errors %}<div class="field-error">{{ form.id_number.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- ── Step 3: Facility ── -->
+        <div class="section-head">Your health facility</div>
+
+        <input class="facility-search" type="text" placeholder="Search facility by name or location…"
+               id="facility-search" oninput="filterFacilities(this.value)" />
+
+        <div class="facility-grid" id="facility-grid">
+          {% for facility in facilities %}
+          <label class="facility-card">
+            <input type="radio" name="facility" value="{{ facility.id }}"
+                   {% if form.facility.value == facility.id|stringformat:"s" %}checked{% endif %} required />
+            <div class="facility-name">{{ facility.name }}</div>
+            <div class="facility-loc">{{ facility.sub_county }}</div>
+          </label>
+          {% empty %}
+          <!-- Placeholder facility cards when no facility records exist -->
+          {% for fac in fallback_facilities %}
+          <label class="facility-card">
+            <input type="radio" name="facility" value="{{ forloop.counter }}" />
+            <div class="facility-name">{{ fac }}</div>
+            <div class="facility-loc">County Facility</div>
+          </label>
+          {% endfor %}
+          {% endfor %}
+        </div>
+        <div class="field-hint" style="margin-top:8px;">
+          Can't find your facility? <a href="{% url 'patient_facility_finder' %}">Browse on map →</a>
+        </div>
+        {% if form.facility.errors %}<div class="field-error">{{ form.facility.errors|join:", " }}</div>{% endif %}
+
+        <!-- ── Step 4: Account credentials ── -->
+        <div class="section-head">Account credentials</div>
+
+        <div class="field">
+          <label for="username">Username *</label>
+          <input type="text" id="username" name="username"
+                 value="{{ form.username.value|default:'' }}"
+                 placeholder="Choose a username" required />
+          {% if form.username.errors %}<div class="field-error">{{ form.username.errors|join:", " }}</div>{% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="password1">Password *</label>
+            <input type="password" id="password1" name="password1"
+                   placeholder="Choose a password" required />
+            {% if form.password1.errors %}<div class="field-error">{{ form.password1.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="field">
+            <label for="password2">Confirm password *</label>
+            <input type="password" id="password2" name="password2"
+                   placeholder="Repeat password" required />
+            {% if form.password2.errors %}<div class="field-error">{{ form.password2.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="field-error">{{ form.non_field_errors|join:", " }}</div>
+        {% endif %}
+
+        <button type="submit" class="btn-submit">
+          <span>Create Account</span>
+          <span class="arrow">→</span>
+        </button>
+      </form>
+
+      <div class="form-footer-note">
+        Already have an account? <a href="{% url 'login' %}">Sign in</a> or <a href="{% url 'community_pulse' %}">back to home</a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function handleTypeChange() {
+    const isStaff = document.getElementById('type-staff').checked;
+    const staffSection = document.getElementById('staff-section');
+    staffSection.classList.toggle('visible', isStaff);
+
+    // Update sidebar step dots
+    document.getElementById('dot-1').classList.add('done');
+    document.getElementById('dot-1').textContent = '✓';
+    document.getElementById('dot-2').classList.add('active');
+    document.getElementById('dot-2').classList.remove('done');
+  }
+
+  function filterFacilities(query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll('.facility-card').forEach(card => {
+      const name = card.querySelector('.facility-name').textContent.toLowerCase();
+      const loc  = card.querySelector('.facility-loc').textContent.toLowerCase();
+      card.style.display = (name.includes(q) || loc.includes(q)) ? '' : 'none';
+    });
+  }
+
+  // Animate step dots as user fills form
+  const fields = document.querySelectorAll('input, select');
+  fields.forEach(f => {
+    f.addEventListener('focus', () => {
+      const section = f.closest('[class*="section"]');
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    handleTypeChange();
+  });
+</script>
+{% endblock %}

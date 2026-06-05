@@ -1,0 +1,378 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Community Health Pulse — AfyaLink{% endblock %}
+
+{% block extra_css %}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --ink: #0d1117;
+  --ink-lt: #161b24;
+  --surface: #111827;
+  --border: rgba(255,255,255,0.08);
+  --teal: #2dd4bf;
+  --teal-dk: #0f766e;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --green: #4ade80;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --white: #ffffff;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; min-height: 100%; font-family: 'DM Sans', sans-serif; background: var(--ink); color: var(--text); }
+body { overflow-x: hidden; }
+
+.page-wrap { position: relative; min-height: 100vh; }
+
+.topnav {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 18px 32px; background: rgba(13,17,23,0.96);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.nav-brand { display: flex; align-items: center; gap: 12px; }
+.nav-mark { width: 36px; height: 36px; border-radius: 14px; display: grid; place-items: center;
+  background: var(--teal-dk); color: var(--teal); font-family: 'Bebas Neue', sans-serif; font-size: 18px; }
+.nav-name { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 2px; }
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.nav-time { color: var(--muted); font-size: 13px; min-width: 60px; text-align: right; }
+.nav-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16);
+  color: var(--white); text-decoration: none; background: rgba(255,255,255,0.05);
+  transition: background 180ms ease;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.12); }
+.nav-btn.primary { background: var(--teal); color: #0f172a; border-color: transparent; }
+
+.main-content { width: min(1200px, 96%); max-width: 1200px; margin: 0 auto; padding: 40px 0 60px; }
+.hero { display: grid; gap: 28px; padding: 40px 0 12px; }
+.hero-eyebrow { display: flex; align-items: center; gap: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--teal); }
+.hero-eyebrow .eyebrow-line { width: 48px; height: 1px; background: var(--border); }
+.hero-title { font-size: clamp(3rem, 5vw, 4.5rem); line-height: 0.95; margin: 0; }
+.hero-title .accent { color: var(--teal); }
+.hero-desc { max-width: 780px; line-height: 1.8; color: var(--muted); }
+.hero-location { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; max-width: 720px; }
+.hero-location input { width: 100%; padding: 14px 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: var(--white); }
+.hero-location input::placeholder { color: rgba(226,232,240,0.6); }
+.hero-location button { border: none; border-radius: 16px; padding: 14px 20px; background: var(--teal); color: #0f172a; cursor: pointer; }
+
+.section { margin-top: 48px; }
+.section-label { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px; }
+.section-label-text { font-size: 1.15rem; font-weight: 700; letter-spacing: 0.02em; }
+.section-label-line { flex: 1; height: 1px; background: rgba(255,255,255,0.08); }
+.section-label-count { color: var(--muted); font-size: 0.95rem; }
+
+.stat-strip { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); }
+.stat-block { padding: 24px; border-radius: 24px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+.stat-num { font-size: 2.35rem; font-weight: 700; line-height: 1; }
+.stat-lbl { margin-top: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; }
+.stat-delta { margin-top: 10px; font-size: 0.93rem; color: var(--green); }
+
+.disease-grid, .med-grid, .env-grid, .feed-list { display: grid; gap: 18px; }
+.disease-grid { grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); }
+.disease-card, .med-card, .env-card, .feed-item { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 22px; padding: 22px; }
+.dc-top, .med-top, .env-header, .feed-dot-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.dc-icon, .med-icon, .env-icon { width: 44px; height: 44px; border-radius: 16px; display: grid; place-items: center; background: rgba(255,255,255,0.08); }
+.dc-risk-tag, .med-type, .env-title, .feed-tag { color: var(--muted); font-size: 0.85rem; }
+.dc-name, .med-name, .env-val { font-weight: 700; font-size: 1.1rem; }
+.dc-desc, .env-sub, .feed-detail { line-height: 1.7; color: var(--muted); }
+.sparkline { display: grid; grid-template-columns: repeat(8, minmax(4px,1fr)); gap: 4px; height: 72px; margin: 20px 0 12px; align-items: end; }
+.spark-bar { background: linear-gradient(180deg, rgba(45,212,191,0.9), rgba(45,212,191,0.3)); border-radius: 999px 999px 0 0; }
+
+.supply-bar-wrap { background: rgba(255,255,255,0.07); border-radius: 999px; height: 12px; overflow: hidden; margin: 16px 0 10px; }
+.supply-bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--teal), rgba(45,212,191,0.52)); }
+.supply-pct { color: var(--muted); font-size: 0.92rem; }
+.env-risk-note { margin-top: 16px; padding: 13px 16px; border-radius: 16px; display: inline-flex; align-items: center; gap: 10px; font-size: 0.92rem; }
+.note-teal { background: rgba(45,212,191,0.1); color: var(--teal); }
+.note-amber { background: rgba(251,191,36,0.16); color: var(--amber); }
+.note-red { background: rgba(248,113,113,0.14); color: var(--red); }
+
+.feed-item { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: flex-start; }
+.feed-dot { width: 14px; height: 14px; border-radius: 999px; }
+.feed-title { font-weight: 700; }
+.feed-meta { display: grid; gap: 8px; justify-items: end; text-align: right; }
+.feed-tag { padding: 6px 10px; border-radius: 999px; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.08em; }
+
+.cta-bar { margin-top: 52px; padding: 32px; border-radius: 28px; display: flex; flex-wrap: wrap; gap: 18px; align-items: center; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
+.cta-title { font-size: 1.5rem; font-weight: 700; margin: 0; }
+.cta-desc { color: var(--muted); margin: 0; max-width: 720px; }
+.cta-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+.cta-btns a { padding: 12px 20px; border-radius: 999px; text-decoration: none; font-weight: 600; }
+.cta-btns .cta-btn-primary { background: var(--teal); color: #0f172a; }
+.cta-btns .cta-btn-ghost { background: rgba(255,255,255,0.08); color: var(--white); border: 1px solid rgba(255,255,255,0.12); }
+
+.page-footer { margin-top: 64px; padding: 28px 0 10px; text-align: center; color: var(--muted); }
+.page-footer .footer-brand { font-weight: 700; margin-bottom: 8px; }
+.page-footer .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 12px; }
+.page-footer .footer-links a { color: rgba(226,232,240,0.72); text-decoration: none; }
+.page-footer .footer-links a:hover { color: var(--teal); }
+
+@media (max-width: 900px) {
+  .topnav { padding: 16px 24px; }
+  .main-content { padding-top: 24px; }
+  .hero { gap: 22px; }
+  .hero-location { grid-template-columns: 1fr; }
+  .nav-right { justify-content: flex-end; }
+  .feed-item { grid-template-columns: 1fr; }
+  .feed-meta { justify-items: start; text-align: left; }
+}
+
+@media (max-width: 680px) {
+  .topnav { flex-direction: column; align-items: stretch; }
+  .nav-right { justify-content: space-between; width: 100%; }
+  .hero-title { font-size: 2.65rem; }
+  .stat-strip, .disease-grid, .med-grid, .env-grid { grid-template-columns: 1fr; }
+  .cta-bar { flex-direction: column; align-items: stretch; }
+}
+</style>
+{% endblock %}
+
+{% block fullpage %}
+<div class="page-wrap">
+  <nav class="topnav" aria-label="Primary navigation">
+    <div class="nav-brand">
+      <div class="nav-mark">A+</div>
+      <div class="nav-name">AFYALINK</div>
+    </div>
+    <div class="nav-right">
+      <div class="nav-time" id="nav-time">?</div>
+      <a href="{% url 'login' %}" class="nav-btn">Sign In</a>
+      <a href="{% url 'register' %}" class="nav-btn primary">Join Now</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-eyebrow">
+        <span class="eyebrow-line"></span>
+        <span>Community Health Intelligence</span>
+      </div>
+      <h1 class="hero-title" id="hero-heading">
+        Know what's <span class="accent">happening</span> near you.
+      </h1>
+      <p class="hero-desc">
+        This page will surface health reporting data once the monitoring feature is enabled. Live analytics and alert summaries will appear here after facilities connect.
+      </p>
+      <div class="hero-location" role="search">
+        <input type="text" id="location-input" placeholder="Enter your area, ward or county…"
+          value="{{ user_location|default:'' }}" aria-label="Update location" />
+        <button class="nav-btn primary" onclick="updateLocation()">Update</button>
+      </div>
+    </section>
+
+    <section class="section" aria-label="Key statistics">
+      <div class="section-label">
+        <span class="section-label-text">Live health statistics</span>
+        <span class="section-label-line"></span>
+        <span class="section-label-count">Connected facilities and alerts</span>
+      </div>
+
+      {% if stats %}
+      <div class="stat-strip">
+        <div class="stat-block">
+          <div class="stat-num">{{ stats.facilities }}</div>
+          <div class="stat-lbl">Facilities Monitored</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-num">{{ stats.active_alerts }}</div>
+          <div class="stat-lbl">Active Alerts</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-num">{{ stats.med_shortage }}</div>
+          <div class="stat-lbl">Medication Shortages</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-num">{{ stats.immunisation_pct }}%</div>
+          <div class="stat-lbl">Immunisation Coverage</div>
+        </div>
+      </div>
+      {% else %}
+      <div class="stat-strip">
+        <div class="stat-block">
+          <div class="stat-num">—</div>
+          <div class="stat-lbl">Live health metrics coming soon</div>
+          <div class="stat-delta">Connect facilities to enable reporting</div>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="section" aria-label="Disease trends">
+      <div class="section-label">
+        <span class="section-label-text">Disease Trends</span>
+        <span class="section-label-line"></span>
+        <span class="section-label-count">Last 8 weeks · {{ user_location|default:"Your region" }}</span>
+      </div>
+      <div class="disease-grid">
+        {% if disease_trends %}
+          {% for disease in disease_trends %}
+            <article class="disease-card">
+              <div class="dc-top">
+                <div class="dc-icon" aria-hidden="true">{{ disease.icon }}</div>
+                <div class="dc-risk-tag">{{ disease.risk_label }}</div>
+              </div>
+              <div class="dc-name">{{ disease.name }}</div>
+              <p class="dc-desc">{{ disease.description }}</p>
+              <div class="sparkline" aria-hidden="true">
+                {% for bar in disease.sparkline %}
+                  <div class="spark-bar" style="height:{{ bar }}%"></div>
+                {% endfor %}
+              </div>
+              <div class="dc-footer">
+                <div class="dc-cases"><strong>{{ disease.cases }}</strong> cases this week</div>
+                <div class="dc-trend">{{ disease.trend_arrow }} {{ disease.trend_pct }}</div>
+              </div>
+            </article>
+          {% endfor %}
+        {% else %}
+          <article class="disease-card">
+            <div class="dc-top"><div class="dc-icon" aria-hidden="true">ND</div><div class="dc-risk-tag">No data</div></div>
+            <div class="dc-name">Disease trend intelligence is not available yet</div>
+            <p class="dc-desc">This section will show detected disease patterns once reporting is enabled.</p>
+          </article>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="section" aria-label="Medication supply levels">
+      <div class="section-label">
+        <span class="section-label-text">Medication Supply</span>
+        <span class="section-label-line"></span>
+        <span class="section-label-count">{{ user_location|default:"Your region" }} · tracked facilities</span>
+      </div>
+      <div class="med-grid">
+        {% if medication_supply %}
+          {% for med in medication_supply %}
+            <div class="med-card">
+              <div class="med-top">
+                <div class="med-icon" aria-hidden="true">{{ med.icon }}</div>
+              </div>
+              <div class="med-name">{{ med.name }}</div>
+              <div class="med-type">{{ med.type }}</div>
+              <div class="supply-bar-wrap" role="progressbar" aria-valuenow="{{ med.pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ med.name }} supply level">
+                <div class="supply-bar" style="width:{{ med.pct }}%"></div>
+              </div>
+              <div class="supply-pct"><strong>{{ med.pct }}%</strong> supply remaining</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="med-card">
+            <div class="med-top"><div class="med-icon" aria-hidden="true">-</div></div>
+            <div class="med-name">Medication supply data will appear here</div>
+            <div class="med-type">Awaiting live reporting</div>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="section" aria-label="Environmental health factors">
+      <div class="section-label">
+        <span class="section-label-text">Environmental Factors</span>
+        <span class="section-label-line"></span>
+        <span class="section-label-count">Health-relevant conditions</span>
+      </div>
+      <div class="env-grid">
+        {% if environmental_factors %}
+          {% for env in environmental_factors %}
+            <div class="env-card">
+              <div class="env-header"><div class="env-icon" aria-hidden="true">{{ env.icon }}</div><div class="env-title">{{ env.title }}</div></div>
+              <div class="env-val">{{ env.value }}<span class="unit">{{ env.unit }}</span></div>
+              <p class="env-sub">{{ env.description }}</p>
+              {% if env.risk_note %}<div class="env-risk-note note-{{ env.note_class }}"><span aria-hidden="true">{{ env.note_icon }}</span>{{ env.risk_note }}</div>{% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="env-card">
+            <div class="env-header"><div class="env-icon" aria-hidden="true">N</div><div class="env-title">No data available</div></div>
+            <div class="env-val">—</div>
+            <p class="env-sub">Environmental health metrics will be shown once the feature is active.</p>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="section" aria-label="Community reports feed">
+      <div class="section-label">
+        <span class="section-label-text">Community Reports</span>
+        <span class="section-label-line"></span>
+        <span class="section-label-count">Recent submissions from connected facilities</span>
+      </div>
+      <div class="feed-list">
+        {% if community_feed %}
+          {% for item in community_feed %}
+            <article class="feed-item">
+              <div class="feed-dot" style="background:{{ item.dot_color }}"></div>
+              <div>
+                <div class="feed-title">{{ item.title }}</div>
+                <div class="feed-detail">{{ item.detail }}</div>
+              </div>
+              <div class="feed-meta"><div class="feed-time">{{ item.time }}</div><div class="feed-tag" style="background:{{ item.tag_bg }};color:{{ item.tag_color }}">{{ item.tag }}</div></div>
+            </article>
+          {% endfor %}
+        {% else %}
+          <article class="feed-item">
+            <div class="feed-dot" style="background:var(--muted)"></div>
+            <div>
+              <div class="feed-title">No reports are available yet</div>
+              <div class="feed-detail">Community reporting will start once facilities connect and submit data.</div>
+            </div>
+            <div class="feed-meta"><div class="feed-time">—</div><div class="feed-tag" style="background:rgba(255,255,255,0.08);color:var(--muted)">Pending</div></div>
+          </article>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="cta-bar">
+      <div>
+        <h2 class="cta-title">Join the network.</h2>
+        <p class="cta-desc">Healthcare workers and facilities: contribute anonymised data to improve community health intelligence.</p>
+      </div>
+      <div class="cta-btns">
+        <a href="{% url 'register' %}" class="cta-btn-primary">Create a free account</a>
+        <a href="{% url 'login' %}" class="cta-btn-ghost">Sign in to dashboard</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    <div class="footer-brand">AFYALINK</div>
+    <div class="footer-note">AfyaLink © {% now "Y" %} — Kisii University Innovation Week 2026</div>
+    <div class="footer-links">
+      <a href="#">About</a>
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Contact</a>
+    </div>
+  </footer>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updateClock() {
+  const el = document.getElementById('nav-time');
+  if (!el) return;
+  const now = new Date();
+  el.textContent = now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+function updateLocation() {
+  const input = document.getElementById('location-input');
+  if (!input) return;
+  const val = input.value.trim();
+  const url = new URL(window.location.href);
+  url.searchParams.set('location', val);
+  window.history.replaceState({}, '', url.toString());
+}
+
+document.getElementById('location-input')?.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); updateLocation(); }
+});
+</script>
+{% endblock %}

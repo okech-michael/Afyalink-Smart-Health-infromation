@@ -1,0 +1,535 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Emergency Alarm — AfyaLink{% endblock %}
+
+{% block nav_emergency %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Emergency alarm</h1>
+  <p>Use this if you cannot travel to a facility and need immediate medical help.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if alarm_sent %}
+<!-- ── CONFIRMATION STATE ── -->
+<div class="confirm-box">
+  <div class="confirm-icon">!</div>
+  <h2>Alarm raised successfully</h2>
+  <p>
+    Your emergency has been reported to the on-duty team at
+    <strong>{{ alarm.facility.name }}</strong>.
+  </p>
+  <p class="mt-8">
+    Response type: <strong>{{ alarm.get_response_type_display }}</strong>
+    &mdash; Reference: <strong>#{{ alarm.id }}</strong>
+  </p>
+  <p class="confirm-note mt-16">
+    Stay calm. Stay where you are. Keep your phone on.
+    If your condition gets worse, call the facility directly:
+    <strong>{{ alarm.facility.phone|default:"See facility contacts" }}</strong>
+  </p>
+  <div class="confirm-actions">
+    <a href="{% url 'patient_dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+    <a href="{% url 'patient_emergency' %}" class="btn btn-danger">Raise another alarm</a>
+  </div>
+</div>
+
+{% else %}
+<!-- ── ALARM FORM ── -->
+
+<div class="emergency-layout">
+
+  <div class="emergency-main">
+
+    <!-- Warning notice -->
+    <div class="notice-box">
+      <p class="notice-title">Before you proceed</p>
+      <p>
+        This alarm will immediately notify the on-duty doctor and emergency team
+        at your selected facility. Only use this if you genuinely cannot travel
+        for medical help. For normal visits, use
+        <a href="{% url 'patient_symptom_entry' %}">symptom entry</a> instead.
+      </p>
+    </div>
+
+    <form method="POST" action="{% url 'patient_emergency' %}">
+      {% csrf_token %}
+
+      <!-- SECTION: Location -->
+      <div class="card">
+        <p class="card-title">Your current location</p>
+
+        <div class="form-group">
+          <label for="location_description">Describe where you are</label>
+          <input
+            type="text"
+            id="location_description"
+            name="location_description"
+            value="{{ form.location_description.value|default:'' }}"
+            placeholder="e.g. Nyanchwa estate, near the blue water tank, house number 14"
+            required
+          />
+          <p class="form-hint">Be as specific as possible so the team can find you quickly.</p>
+          {% if form.location_description.errors %}
+            <p class="form-error">{{ form.location_description.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="latitude">GPS latitude (auto-detected)</label>
+            <input
+              type="text"
+              id="latitude"
+              name="latitude"
+              value="{{ form.latitude.value|default:'' }}"
+              placeholder="Click detect location"
+              readonly
+            />
+          </div>
+          <div class="form-group">
+            <label for="longitude">GPS longitude (auto-detected)</label>
+            <input
+              type="text"
+              id="longitude"
+              name="longitude"
+              value="{{ form.longitude.value|default:'' }}"
+              placeholder="Click detect location"
+              readonly
+            />
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-secondary btn-sm" id="detect-location-btn">
+          Detect my GPS location
+        </button>
+        <span class="text-muted" id="gps-status" style="font-size:12px;margin-left:10px;"></span>
+
+      </div>
+
+      <!-- SECTION: Condition -->
+      <div class="card">
+        <p class="card-title">Your condition</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="condition_type">Type of emergency</label>
+            <select id="condition_type" name="condition_type" required>
+              <option value="" disabled {% if not form.condition_type.value %}selected{% endif %}>-- Select --</option>
+              <optgroup label="Medical">
+                <option value="chest_pain"    {% if form.condition_type.value == 'chest_pain' %}selected{% endif %}>Chest pain / heart</option>
+                <option value="breathing"     {% if form.condition_type.value == 'breathing' %}selected{% endif %}>Difficulty breathing</option>
+                <option value="unconscious"   {% if form.condition_type.value == 'unconscious' %}selected{% endif %}>Unconscious / unresponsive</option>
+                <option value="seizure"       {% if form.condition_type.value == 'seizure' %}selected{% endif %}>Seizure / convulsions</option>
+                <option value="stroke"        {% if form.condition_type.value == 'stroke' %}selected{% endif %}>Suspected stroke</option>
+                <option value="severe_pain"   {% if form.condition_type.value == 'severe_pain' %}selected{% endif %}>Severe pain</option>
+                <option value="bleeding"      {% if form.condition_type.value == 'bleeding' %}selected{% endif %}>Heavy bleeding</option>
+                <option value="allergic"      {% if form.condition_type.value == 'allergic' %}selected{% endif %}>Severe allergic reaction</option>
+              </optgroup>
+              <optgroup label="Maternity">
+                <option value="labour"        {% if form.condition_type.value == 'labour' %}selected{% endif %}>Labour / about to give birth</option>
+                <option value="pregnancy_comp"{% if form.condition_type.value == 'pregnancy_comp' %}selected{% endif %}>Pregnancy complication</option>
+              </optgroup>
+              <optgroup label="Injury">
+                <option value="accident"      {% if form.condition_type.value == 'accident' %}selected{% endif %}>Accident / trauma</option>
+                <option value="burn"          {% if form.condition_type.value == 'burn' %}selected{% endif %}>Burns</option>
+                <option value="poisoning"     {% if form.condition_type.value == 'poisoning' %}selected{% endif %}>Poisoning / overdose</option>
+              </optgroup>
+              <option value="other"           {% if form.condition_type.value == 'other' %}selected{% endif %}>Other</option>
+            </select>
+            {% if form.condition_type.errors %}
+              <p class="form-error">{{ form.condition_type.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label for="severity">How severe is it right now?</label>
+            <select id="severity" name="severity" required>
+              <option value="" disabled {% if not form.severity.value %}selected{% endif %}>-- Select --</option>
+              <option value="serious"  {% if form.severity.value == 'serious' %}selected{% endif %}>Serious — I need help but I am conscious</option>
+              <option value="critical" {% if form.severity.value == 'critical' %}selected{% endif %}>Critical — life threatening, I need help immediately</option>
+            </select>
+            {% if form.severity.errors %}
+              <p class="form-error">{{ form.severity.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Describe what is happening</label>
+          <textarea
+            id="description"
+            name="description"
+            rows="3"
+            placeholder="e.g. I have had severe chest pain for the last 20 minutes. I am sweating and my left arm is numb. I am alone."
+            required
+          >{{ form.description.value|default:'' }}</textarea>
+          {% if form.description.errors %}
+            <p class="form-error">{{ form.description.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="patient_count">Number of people needing help</label>
+            <select id="patient_count" name="patient_count">
+              <option value="1"  {% if form.patient_count.value == '1' or not form.patient_count.value %}selected{% endif %}>1 — just me</option>
+              <option value="2"  {% if form.patient_count.value == '2' %}selected{% endif %}>2 people</option>
+              <option value="3"  {% if form.patient_count.value == '3' %}selected{% endif %}>3 people</option>
+              <option value="4+" {% if form.patient_count.value == '4+' %}selected{% endif %}>4 or more</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="conscious">Are you conscious and able to speak?</label>
+            <select id="conscious" name="conscious">
+              <option value="yes" {% if form.conscious.value != 'no' %}selected{% endif %}>Yes</option>
+              <option value="no"  {% if form.conscious.value == 'no' %}selected{% endif %}>No (someone else is submitting this)</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SECTION: Response + Facility -->
+      <div class="card">
+        <p class="card-title">Requested response</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="response_type">What do you need?</label>
+            <select id="response_type" name="response_type" required>
+              <option value="home_visit"  {% if form.response_type.value == 'home_visit' or not form.response_type.value %}selected{% endif %}>Home visit — doctor or nurse comes to me</option>
+              <option value="ambulance"   {% if form.response_type.value == 'ambulance' %}selected{% endif %}>Ambulance — I need to be transported to hospital</option>
+              <option value="advice"      {% if form.response_type.value == 'advice' %}selected{% endif %}>Advice only — guidance on what to do</option>
+            </select>
+            {% if form.response_type.errors %}
+              <p class="form-error">{{ form.response_type.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label for="facility">Alert which facility</label>
+            <select id="facility" name="facility" required>
+              {% for facility in facilities %}
+                <option value="{{ facility.id }}"
+                  {% if facility.id == request.user.profile.facility.id %}selected{% endif %}>
+                  {{ facility.name }}
+                </option>
+              {% endfor %}
+            </select>
+            <p class="form-hint">Defaults to your registered facility.</p>
+            {% if form.facility.errors %}
+              <p class="form-error">{{ form.facility.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="contact_number">Best phone number to reach you now</label>
+          <input
+            type="text"
+            id="contact_number"
+            name="contact_number"
+            value="{{ form.contact_number.value|default:request.user.profile.phone_number }}"
+            placeholder="e.g. 0712 345 678"
+            required
+          />
+          {% if form.contact_number.errors %}
+            <p class="form-error">{{ form.contact_number.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+      </div>
+
+      {% if form.non_field_errors %}
+        <p class="form-error">{{ form.non_field_errors|join:", " }}</p>
+      {% endif %}
+
+      <div class="form-actions">
+        <a href="{% url 'patient_dashboard' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-danger btn-lg" id="submit-alarm-btn">
+          Send emergency alarm
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+
+  <!-- ── RIGHT: Info sidebar ── -->
+  <aside class="emergency-aside">
+
+    <div class="info-box info-box-red">
+      <p class="info-box-title">What happens next</p>
+      <ol class="info-steps">
+        <li>Your alarm is sent immediately to the on-duty doctor and emergency team.</li>
+        <li>The facility receives your location, condition and contact number.</li>
+        <li>They will call you back within minutes to confirm the response.</li>
+        <li>Stay where you are. Keep your phone accessible.</li>
+      </ol>
+    </div>
+
+    <div class="info-box">
+      <p class="info-box-title">Your registered facility</p>
+      <p class="facility-name-display">{{ request.user.profile.facility.name|default:"Not set" }}</p>
+      <p class="text-muted mt-8">{{ request.user.profile.facility.phone|default:"No phone on record" }}</p>
+      <p class="text-muted mt-8">
+        <a href="{% url 'patient_facility_finder' %}">Change facility</a>
+      </p>
+    </div>
+
+    <div class="info-box">
+      <p class="info-box-title">Kenya emergency numbers</p>
+      <table class="contact-table">
+        <tr>
+          <td>Ambulance</td>
+          <td><strong>0800 720 150</strong></td>
+        </tr>
+        <tr>
+          <td>Police</td>
+          <td><strong>999 / 112</strong></td>
+        </tr>
+        <tr>
+          <td>Fire brigade</td>
+          <td><strong>0800 723 999</strong></td>
+        </tr>
+      </table>
+    </div>
+
+  </aside>
+
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .emergency-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .emergency-main { min-width: 0; }
+
+  /* Warning notice */
+  .notice-box {
+    background: #fffbeb;
+    border: 1px solid #d97706;
+    border-left: 4px solid #d97706;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-700);
+    line-height: 1.6;
+  }
+
+  .notice-title {
+    font-weight: bold;
+    color: #92400e;
+    margin-bottom: 4px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Form rows */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-error {
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+  }
+
+  /* Submit row */
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 8px;
+    margin-bottom: 32px;
+    align-items: center;
+  }
+
+  /* Confirmation box */
+  .confirm-box {
+    max-width: 540px;
+    margin: 40px auto;
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-top: 4px solid var(--green);
+    border-radius: var(--radius);
+    padding: 36px 36px 28px;
+    text-align: center;
+  }
+
+  .confirm-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--green-light);
+    color: var(--green);
+    font-size: 26px;
+    font-weight: bold;
+    line-height: 48px;
+    text-align: center;
+    margin: 0 auto 16px;
+    border: 2px solid var(--green);
+  }
+
+  .confirm-box h2 {
+    font-size: 20px;
+    font-family: Georgia, serif;
+    color: var(--green);
+    margin-bottom: 12px;
+  }
+
+  .confirm-box p {
+    font-size: 14px;
+    color: var(--gray-700);
+    line-height: 1.6;
+  }
+
+  .confirm-note {
+    background: var(--green-light);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--green);
+    font-family: Arial, sans-serif;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 24px;
+  }
+
+  /* Sidebar */
+  .info-box {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--gray-700);
+    line-height: 1.6;
+    font-family: Arial, sans-serif;
+  }
+
+  .info-box-red {
+    border-left: 3px solid var(--red);
+    background: var(--red-light);
+  }
+
+  .info-box-title {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+    margin-bottom: 10px;
+  }
+
+  .info-box-red .info-box-title { color: var(--red); }
+
+  .info-steps {
+    padding-left: 18px;
+    margin: 0;
+  }
+
+  .info-steps li {
+    margin-bottom: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .facility-name-display {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--blue-dark);
+  }
+
+  .contact-table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
+  }
+
+  .contact-table td {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+  }
+
+  .contact-table tr:last-child td { border-bottom: none; }
+
+  @media (max-width: 860px) {
+    .emergency-layout { grid-template-columns: 1fr; }
+    .emergency-aside { order: -1; }
+  }
+
+  @media (max-width: 560px) {
+    .form-row { grid-template-columns: 1fr; }
+    .form-actions { flex-direction: column; align-items: stretch; }
+    .form-actions .btn { text-align: center; }
+    .confirm-actions { flex-direction: column; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  // GPS detection
+  document.getElementById('detect-location-btn').addEventListener('click', function () {
+    var status = document.getElementById('gps-status');
+    if (!navigator.geolocation) {
+      status.textContent = 'Geolocation not supported on this device.';
+      return;
+    }
+    status.textContent = 'Detecting...';
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        document.getElementById('latitude').value  = pos.coords.latitude.toFixed(6);
+        document.getElementById('longitude').value = pos.coords.longitude.toFixed(6);
+        status.textContent = 'Location detected.';
+      },
+      function () {
+        status.textContent = 'Could not detect location. Please describe your location manually.';
+      }
+    );
+  });
+
+  // Confirm before submitting
+  document.getElementById('submit-alarm-btn').addEventListener('click', function (e) {
+    var confirmed = window.confirm(
+      'You are about to send an emergency alarm to your health facility.\n\n' +
+      'Only proceed if you genuinely need urgent medical help.\n\n' +
+      'Continue?'
+    );
+    if (!confirmed) e.preventDefault();
+  });
+</script>
+{% endblock %}

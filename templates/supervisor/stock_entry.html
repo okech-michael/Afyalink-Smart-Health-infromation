@@ -1,0 +1,356 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Log Drug Delivery — AfyaLink{% endblock %}
+
+{% block nav_stock_entry %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Log drug delivery</h1>
+    <p>{{ request.user.profile.facility.name }}</p>
+  </div>
+  <a href="{% url 'supervisor_dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if delivery_saved %}
+<div class="confirm-box">
+  <div class="confirm-icon">&#10003;</div>
+  <h2>Delivery logged</h2>
+  <p>
+    <strong>{{ saved_delivery.quantity }} {{ saved_delivery.unit }}</strong>
+    of <strong>{{ saved_delivery.drug_name }}</strong>
+    have been added to stock.
+  </p>
+  <p class="mt-8 text-muted">
+    New stock level: {{ new_stock_level }} {{ saved_delivery.unit }}
+  </p>
+  <div class="confirm-actions">
+    <a href="{% url 'supervisor_dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+    <a href="{% url 'supervisor_stock_entry' %}" class="btn btn-primary">Log another delivery</a>
+  </div>
+</div>
+
+{% else %}
+
+<div class="entry-layout">
+<div class="entry-main">
+
+  <form method="POST" action="{% url 'supervisor_stock_entry' %}">
+    {% csrf_token %}
+
+    <div class="card">
+      <p class="card-title">Delivery details</p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="drug_name">Drug name</label>
+          <input
+            type="text"
+            id="drug_name"
+            name="drug_name"
+            value="{{ form.drug_name.value|default:'' }}"
+            placeholder="e.g. Amoxicillin 500mg capsules"
+            list="drug-list"
+            required
+          />
+          <!-- Datalist for common drug names -->
+          <datalist id="drug-list">
+            {% for drug in known_drugs %}
+              <option value="{{ drug }}">
+            {% endfor %}
+          </datalist>
+          {% if form.drug_name.errors %}
+            <p class="form-error">{{ form.drug_name.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          <label for="category">Category</label>
+          <select id="category" name="category">
+            <option value="">— Select category —</option>
+            <option value="antibiotic"     {% if form.category.value == 'antibiotic' %}selected{% endif %}>Antibiotic</option>
+            <option value="analgesic"      {% if form.category.value == 'analgesic' %}selected{% endif %}>Analgesic / pain relief</option>
+            <option value="antimalarial"   {% if form.category.value == 'antimalarial' %}selected{% endif %}>Antimalarial</option>
+            <option value="antifungal"     {% if form.category.value == 'antifungal' %}selected{% endif %}>Antifungal</option>
+            <option value="antiretroviral" {% if form.category.value == 'antiretroviral' %}selected{% endif %}>Antiretroviral (ARV)</option>
+            <option value="antihypertensive" {% if form.category.value == 'antihypertensive' %}selected{% endif %}>Antihypertensive</option>
+            <option value="antidiabetic"   {% if form.category.value == 'antidiabetic' %}selected{% endif %}>Antidiabetic</option>
+            <option value="vaccine"        {% if form.category.value == 'vaccine' %}selected{% endif %}>Vaccine</option>
+            <option value="iv_fluid"       {% if form.category.value == 'iv_fluid' %}selected{% endif %}>IV fluid</option>
+            <option value="supplement"     {% if form.category.value == 'supplement' %}selected{% endif %}>Supplement / vitamin</option>
+            <option value="other"          {% if form.category.value == 'other' %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="quantity">Quantity delivered</label>
+          <input
+            type="number"
+            id="quantity"
+            name="quantity"
+            value="{{ form.quantity.value|default:'' }}"
+            min="1"
+            placeholder="e.g. 500"
+            required
+          />
+          {% if form.quantity.errors %}
+            <p class="form-error">{{ form.quantity.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          <label for="unit">Unit</label>
+          <select id="unit" name="unit" required>
+            <option value="tablets"  {% if form.unit.value == 'tablets' or not form.unit.value %}selected{% endif %}>Tablets</option>
+            <option value="capsules" {% if form.unit.value == 'capsules' %}selected{% endif %}>Capsules</option>
+            <option value="vials"    {% if form.unit.value == 'vials' %}selected{% endif %}>Vials</option>
+            <option value="ampoules" {% if form.unit.value == 'ampoules' %}selected{% endif %}>Ampoules</option>
+            <option value="bottles"  {% if form.unit.value == 'bottles' %}selected{% endif %}>Bottles</option>
+            <option value="sachets"  {% if form.unit.value == 'sachets' %}selected{% endif %}>Sachets</option>
+            <option value="litres"   {% if form.unit.value == 'litres' %}selected{% endif %}>Litres</option>
+            <option value="units"    {% if form.unit.value == 'units' %}selected{% endif %}>Units</option>
+          </select>
+          {% if form.unit.errors %}
+            <p class="form-error">{{ form.unit.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="supplier">Supplier name</label>
+          <input
+            type="text"
+            id="supplier"
+            name="supplier"
+            value="{{ form.supplier.value|default:'' }}"
+            placeholder="e.g. KEMSA, Meds4All Ltd"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="delivery_date">Delivery date</label>
+          <input
+            type="date"
+            id="delivery_date"
+            name="delivery_date"
+            value="{{ today|date:'Y-m-d' }}"
+            required
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="batch_number">Batch / lot number</label>
+          <input
+            type="text"
+            id="batch_number"
+            name="batch_number"
+            value="{{ form.batch_number.value|default:'' }}"
+            placeholder="e.g. KE-2024-00123"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="expiry_date">Expiry date</label>
+          <input
+            type="date"
+            id="expiry_date"
+            name="expiry_date"
+            value="{{ form.expiry_date.value|default:'' }}"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="low_stock_threshold">Low stock alert threshold</label>
+          <input
+            type="number"
+            id="low_stock_threshold"
+            name="low_stock_threshold"
+            value="{{ form.low_stock_threshold.value|default:'50' }}"
+            min="1"
+            placeholder="e.g. 50"
+          />
+          <p class="form-hint">
+            Alert fires to you and the supplier when remaining stock
+            falls to or below this number.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label for="facility">Facility</label>
+          <select id="facility" name="facility" required>
+            {% for facility in facilities %}
+              <option value="{{ facility.id }}"
+                {% if facility.id == request.user.profile.facility.id %}selected{% endif %}>
+                {{ facility.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="delivery_notes">Notes</label>
+        <textarea
+          id="delivery_notes"
+          name="delivery_notes"
+          rows="2"
+          placeholder="Any notes about this delivery (condition of goods, partial delivery, etc.)"
+        >{{ form.delivery_notes.value|default:'' }}</textarea>
+      </div>
+
+      {% if form.non_field_errors %}
+        <p class="form-error">{{ form.non_field_errors|join:", " }}</p>
+      {% endif %}
+
+      <div class="form-actions">
+        <a href="{% url 'supervisor_dashboard' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save delivery &amp; update stock</button>
+      </div>
+
+    </div>
+  </form>
+
+</div>
+
+<!-- ASIDE: Current stock for reference -->
+<aside class="entry-aside">
+  <div class="card">
+    <p class="card-title">Current stock</p>
+    <p class="text-muted" style="font-size:12px;margin-bottom:12px;">
+      Stock levels before this delivery.
+    </p>
+    {% if stock_items %}
+      {% for item in stock_items %}
+      <div class="stock-ref-row">
+        <div>
+          <p class="stock-ref-name">{{ item.drug_name }}</p>
+          <p class="stock-ref-qty text-muted">{{ item.quantity_remaining }} {{ item.unit }}</p>
+        </div>
+        <span class="badge
+          {% if item.status == 'available' %}badge-green
+          {% elif item.status == 'low' %}badge-amber
+          {% else %}badge-red{% endif %}">
+          {{ item.status|title }}
+        </span>
+      </div>
+      {% if not forloop.last %}<hr class="item-divider">{% endif %}
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">No stock records yet.</p>
+    {% endif %}
+  </div>
+</aside>
+
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .entry-layout {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .entry-main { min-width: 0; }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-error {
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  /* Confirm */
+  .confirm-box {
+    max-width: 480px;
+    margin: 40px auto;
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-top: 4px solid var(--green);
+    border-radius: var(--radius);
+    padding: 36px 36px 28px;
+    text-align: center;
+  }
+
+  .confirm-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--green-light);
+    color: var(--green);
+    font-size: 22px;
+    line-height: 48px;
+    text-align: center;
+    margin: 0 auto 16px;
+    border: 2px solid var(--green);
+  }
+
+  .confirm-box h2 { font-size: 20px; font-family: Georgia, serif; color: var(--green); margin-bottom: 12px; }
+  .confirm-box p  { font-size: 14px; color: var(--gray-700); line-height: 1.6; }
+  .confirm-actions { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+
+  /* Aside */
+  .stock-ref-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    gap: 8px;
+  }
+
+  .stock-ref-name {
+    font-size: 12px;
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+  }
+
+  .stock-ref-qty { font-size: 11px; margin-top: 1px; }
+
+  .item-divider { border: none; border-top: 1px solid var(--gray-200); margin: 2px 0; }
+
+  @media (max-width: 860px) {
+    .entry-layout { grid-template-columns: 1fr; }
+    .entry-aside { order: -1; }
+  }
+
+  @media (max-width: 560px) {
+    .form-row { grid-template-columns: 1fr; }
+    .form-actions { flex-direction: column; }
+    .form-actions .btn { text-align: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}

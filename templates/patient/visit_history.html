@@ -1,0 +1,353 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Visit History — AfyaLink{% endblock %}
+
+{% block nav_visit_history %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>My health records</h1>
+    <p>Complete visit history for {{ request.user.get_full_name|default:request.user.username }}</p>
+  </div>
+  <a href="{% url 'patient_symptom_entry' %}" class="btn btn-primary">Enter symptoms for next visit</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── SUMMARY STATS ── -->
+<div class="stat-grid">
+
+  <div class="stat-card">
+    <p class="stat-label">Total visits</p>
+    <p class="stat-value">{{ total_visits|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card green">
+    <p class="stat-label">Facilities visited</p>
+    <p class="stat-value">{{ facilities_visited|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card amber">
+    <p class="stat-label">Pending lab results</p>
+    <p class="stat-value">{{ pending_results|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card">
+    <p class="stat-label">Last visit</p>
+    <p class="stat-value">
+      {% if last_visit %}
+        {{ last_visit.date|date:"j M Y" }}
+      {% else %}
+        None
+      {% endif %}
+    </p>
+  </div>
+
+</div>
+
+
+<!-- ── FILTER BAR ── -->
+<div class="card filter-bar">
+  <form method="GET" action="{% url 'patient_visit_history' %}">
+    <div class="filter-row">
+
+      <div class="filter-group">
+        <label for="filter_facility">Facility</label>
+        <select id="filter_facility" name="facility">
+          <option value="">All facilities</option>
+          {% for facility in facilities %}
+            <option value="{{ facility.id }}"
+              {% if request.GET.facility == facility.id|stringformat:"s" %}selected{% endif %}>
+              {{ facility.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filter_from">From date</label>
+        <input
+          type="date"
+          id="filter_from"
+          name="from_date"
+          value="{{ request.GET.from_date|default:'' }}"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label for="filter_to">To date</label>
+        <input
+          type="date"
+          id="filter_to"
+          name="to_date"
+          value="{{ request.GET.to_date|default:'' }}"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label for="filter_status">Status</label>
+        <select id="filter_status" name="status">
+          <option value="">All</option>
+          <option value="complete"    {% if request.GET.status == 'complete' %}selected{% endif %}>Complete</option>
+          <option value="in_progress" {% if request.GET.status == 'in_progress' %}selected{% endif %}>In progress</option>
+          <option value="pending"     {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        <a href="{% url 'patient_visit_history' %}" class="btn btn-secondary btn-sm">Clear</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+
+<!-- ── VISITS TABLE ── -->
+<div class="card">
+  <p class="card-title">
+    Visit records
+    {% if visits %}
+      <span class="record-count">{{ visits|length }} record{{ visits|length|pluralize }}</span>
+    {% endif %}
+  </p>
+
+  {% if visits %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Facility</th>
+            <th>Doctor</th>
+            <th>Diagnosis</th>
+            <th>Lab results</th>
+            <th>Drugs given</th>
+            <th>Cost (KES)</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for visit in visits %}
+          <tr>
+            <td>{{ visit.date|date:"j M Y" }}</td>
+            <td>{{ visit.facility.name }}</td>
+            <td>
+              {% if visit.doctor %}
+                Dr. {{ visit.doctor.get_full_name }}
+              {% else %}
+                <span class="text-muted">Not assigned</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if visit.diagnosis %}
+                {{ visit.diagnosis|truncatechars:40 }}
+              {% else %}
+                <span class="text-muted">Pending</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if visit.lab_results.exists %}
+                {% if visit.status == 'complete' %}
+                  <span class="badge badge-green">Ready</span>
+                {% else %}
+                  <span class="badge badge-amber">Pending</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">None</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if visit.prescriptions.exists %}
+                <span class="badge badge-blue">{{ visit.prescriptions.count }} drug{{ visit.prescriptions.count|pluralize }}</span>
+              {% else %}
+                <span class="text-muted">None</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if visit.total_cost %}
+                {{ visit.total_cost|floatformat:2 }}
+              {% else %}
+                <span class="text-muted">Pending</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge
+                {% if visit.status == 'complete' %}badge-green
+                {% elif visit.status == 'in_progress' %}badge-blue
+                {% else %}badge-gray{% endif %}">
+                {{ visit.get_status_display }}
+              </span>
+            </td>
+            <td>
+              <a href="{% url 'patient_visit_detail' visit.id %}" class="btn btn-secondary btn-sm">View</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if visits.has_other_pages %}
+    <div class="pagination">
+      {% if visits.has_previous %}
+        <a href="?page={{ visits.previous_page_number }}{% if request.GET.facility %}&facility={{ request.GET.facility }}{% endif %}{% if request.GET.from_date %}&from_date={{ request.GET.from_date }}{% endif %}{% if request.GET.to_date %}&to_date={{ request.GET.to_date }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" class="btn btn-secondary btn-sm">Previous</a>
+      {% endif %}
+
+      <span class="pagination-info">
+        Page {{ visits.number }} of {{ visits.paginator.num_pages }}
+      </span>
+
+      {% if visits.has_next %}
+        <a href="?page={{ visits.next_page_number }}{% if request.GET.facility %}&facility={{ request.GET.facility }}{% endif %}{% if request.GET.from_date %}&from_date={{ request.GET.from_date }}{% endif %}{% if request.GET.to_date %}&to_date={{ request.GET.to_date }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" class="btn btn-secondary btn-sm">Next</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  {% else %}
+    <div class="empty-state">
+      <p class="empty-title">No visits found</p>
+      {% if request.GET.facility or request.GET.from_date or request.GET.status %}
+        <p class="text-muted">No visits match your filter. <a href="{% url 'patient_visit_history' %}">Clear filters</a> to see all records.</p>
+      {% else %}
+        <p class="text-muted">Your visit records will appear here after your first visit to a facility.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+
+
+<!-- ── TRANSFERRED RECORDS NOTE ── -->
+{% if transferred_visits %}
+<div class="card">
+  <p class="card-title">Records from other facilities</p>
+  <p class="text-muted" style="margin-bottom:14px;">
+    These records were transferred to your current facility from another hospital.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Original facility</th>
+          <th>Referred to</th>
+          <th>Reason for transfer</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for visit in transferred_visits %}
+        <tr>
+          <td>{{ visit.date|date:"j M Y" }}</td>
+          <td>{{ visit.facility.name }}</td>
+          <td>{{ visit.referred_to.name }}</td>
+          <td>{{ visit.referral_reason|truncatechars:60 }}</td>
+          <td>
+            <a href="{% url 'patient_visit_detail' visit.id %}" class="btn btn-secondary btn-sm">View</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  /* Filter bar */
+  .filter-bar { padding: 16px 20px; margin-bottom: 20px; }
+
+  .filter-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 140px;
+    flex: 1;
+  }
+
+  .filter-group label {
+    font-size: 10px;
+    margin-bottom: 0;
+  }
+
+  .filter-group select,
+  .filter-group input {
+    font-size: 13px;
+    padding: 7px 10px;
+  }
+
+  .filter-actions {
+    display: flex;
+    gap: 8px;
+    padding-bottom: 1px;
+    flex-shrink: 0;
+  }
+
+  /* Record count in card title */
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .empty-title {
+    font-size: 15px;
+    font-family: Georgia, serif;
+    color: var(--gray-700);
+    margin-bottom: 8px;
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px 0 4px;
+    border-top: 1px solid var(--gray-200);
+    margin-top: 12px;
+  }
+
+  .pagination-info {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  @media (max-width: 700px) {
+    .filter-row { flex-direction: column; }
+    .filter-group { min-width: 100%; }
+    .filter-actions { width: 100%; }
+    .filter-actions .btn { flex: 1; text-align: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}

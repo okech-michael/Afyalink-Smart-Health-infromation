@@ -1,0 +1,553 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Reception Dashboard — AfyaLink{% endblock %}
+
+{% block nav_reception_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Reception</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <a href="{% url 'reception_register_visit' %}" class="btn btn-primary">Register new visit</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STAT ROW ── -->
+<div class="stat-grid">
+
+  <div class="stat-card">
+    <p class="stat-label">Registered today</p>
+    <p class="stat-value">{{ total_today|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card amber">
+    <p class="stat-label">Waiting for triage</p>
+    <p class="stat-value">{{ waiting_triage|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card blue">
+    <p class="stat-label">With doctor</p>
+    <p class="stat-value">{{ with_doctor|default:"0" }}</p>
+  </div>
+
+  <div class="stat-card green">
+    <p class="stat-label">Completed today</p>
+    <p class="stat-value">{{ completed_today|default:"0" }}</p>
+  </div>
+
+</div>
+
+
+<!-- ── PRE-ARRIVAL ALERTS ── -->
+{% if unregistered_pre_arrivals %}
+<div class="pre-arrival-banner">
+  <p class="pre-arrival-banner-title">
+    {{ unregistered_pre_arrivals|length }}
+    patient{{ unregistered_pre_arrivals|length|pluralize }}
+    submitted symptoms from home and have not yet checked in
+  </p>
+  <div class="pre-arrival-list">
+    {% for entry in unregistered_pre_arrivals %}
+    <div class="pre-arrival-chip">
+      <span class="pre-chip-name">{{ entry.patient.get_full_name }}</span>
+      <span class="pre-chip-detail">
+        {{ entry.body_part|title }} &mdash;
+        <span class="severity-{{ entry.severity }}">{{ entry.severity|title }}</span>
+      </span>
+      <a href="{% url 'reception_register_visit' %}?patient={{ entry.patient.id }}"
+         class="btn btn-secondary btn-sm">
+        Check in
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+
+<!-- ── MAIN GRID ── -->
+<div class="reception-grid">
+
+  <!-- LEFT: Today's full queue -->
+  <div class="card">
+    <div class="flex-between mb-16">
+      <p class="card-title" style="margin-bottom:0;border:none;padding:0;">
+        Today's patients
+        <span class="record-count">{{ today_visits|length }} total</span>
+      </p>
+      <div class="queue-filter">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="waiting">Waiting</button>
+        <button class="filter-btn" data-filter="in_progress">In progress</button>
+        <button class="filter-btn" data-filter="complete">Complete</button>
+      </div>
+    </div>
+
+    <!-- Quick patient search -->
+    <div class="quick-search-row">
+      <input
+        type="text"
+        id="queue-search"
+        placeholder="Filter by patient name..."
+        class="queue-search-input"
+      />
+    </div>
+
+    {% if today_visits %}
+    <div class="table-wrap">
+      <table id="visits-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Patient</th>
+            <th>Visit type</th>
+            <th>Payment</th>
+            <th>Pre-arrival</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for visit in today_visits %}
+          <tr data-status="{{ visit.status }}" data-name="{{ visit.patient.get_full_name|lower }}">
+            <td>{{ visit.check_in_time|time:"H:i" }}</td>
+            <td>
+              <p class="patient-name-cell">{{ visit.patient.get_full_name }}</p>
+              <p class="patient-meta-cell">
+                {{ visit.patient.profile.phone_number|default:"No phone" }}
+              </p>
+            </td>
+            <td>{{ visit.get_visit_type_display }}</td>
+            <td>{{ visit.get_payment_mode_display }}</td>
+            <td>
+              {% if visit.symptom_entry %}
+                <span class="badge badge-blue">Yes</span>
+              {% else %}
+                <span class="text-muted">No</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge
+                {% if visit.status == 'complete' %}badge-green
+                {% elif visit.status == 'in_progress' %}badge-blue
+                {% elif visit.status == 'waiting' %}badge-amber
+                {% else %}badge-gray{% endif %}">
+                {{ visit.get_status_display }}
+              </span>
+            </td>
+            <td>
+              <a href="{% url 'reception_register_visit' %}?edit={{ visit.id }}"
+                 class="btn btn-secondary btn-sm">
+                Edit
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% else %}
+      <div class="empty-state">
+        <p class="empty-title">No patients registered yet today</p>
+        <p class="text-muted">
+          <a href="{% url 'reception_register_visit' %}">Register the first visit</a>
+        </p>
+      </div>
+    {% endif %}
+
+  </div>
+
+
+  <!-- RIGHT: Sidebar panels -->
+  <div class="reception-right-col">
+
+    <!-- Incoming referrals -->
+    <div class="card">
+      <p class="card-title">Incoming referrals</p>
+
+      {% if incoming_referrals %}
+        {% for referral in incoming_referrals %}
+        <div class="referral-row">
+          <div>
+            <p class="referral-patient">{{ referral.patient.get_full_name }}</p>
+            <p class="referral-from text-muted">
+              From: {{ referral.from_facility.name }}
+            </p>
+            <p class="referral-reason text-muted">
+              {{ referral.reason|truncatechars:60 }}
+            </p>
+          </div>
+          <a href="{% url 'reception_register_visit' %}?patient={{ referral.patient.id }}&referral={{ referral.id }}"
+             class="btn btn-secondary btn-sm">
+            Register
+          </a>
+        </div>
+        {% if not forloop.last %}<hr class="item-divider">{% endif %}
+        {% endfor %}
+      {% else %}
+        <p class="text-muted">No pending referrals.</p>
+      {% endif %}
+    </div>
+
+    <!-- Flow summary -->
+    <div class="card">
+      <p class="card-title">Patient flow today</p>
+      <div class="flow-steps">
+
+        <div class="flow-step">
+          <span class="flow-num">{{ total_today|default:"0" }}</span>
+          <span class="flow-label">Registered</span>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+
+        <div class="flow-step">
+          <span class="flow-num">{{ triaged|default:"0" }}</span>
+          <span class="flow-label">Triaged</span>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+
+        <div class="flow-step">
+          <span class="flow-num">{{ seen_by_doctor|default:"0" }}</span>
+          <span class="flow-label">Seen</span>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+
+        <div class="flow-step">
+          <span class="flow-num">{{ completed_today|default:"0" }}</span>
+          <span class="flow-label">Discharged</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Recent activity log -->
+    <div class="card">
+      <p class="card-title">Recent activity</p>
+
+      {% if activity_log %}
+        <div class="activity-list">
+          {% for log in activity_log %}
+          <div class="activity-item">
+            <span class="activity-time">{{ log.timestamp|time:"H:i" }}</span>
+            <span class="activity-text">{{ log.message }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted">No activity recorded yet today.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  /* Pre-arrival banner */
+  .pre-arrival-banner {
+    background: var(--blue-light);
+    border: 1px solid var(--blue);
+    border-left: 4px solid var(--blue);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 24px;
+  }
+
+  .pre-arrival-banner-title {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .pre-arrival-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pre-arrival-chip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    flex-wrap: wrap;
+  }
+
+  .pre-chip-name {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    min-width: 140px;
+  }
+
+  .pre-chip-detail {
+    color: var(--gray-500);
+    flex: 1;
+  }
+
+  .severity-critical { color: var(--red); font-weight: bold; }
+  .severity-severe   { color: #d97706; font-weight: bold; }
+  .severity-moderate { color: var(--gray-700); }
+  .severity-mild     { color: var(--green); }
+
+  /* Main grid */
+  .reception-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .reception-right-col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Queue filter */
+  .queue-filter {
+    display: flex;
+    gap: 4px;
+  }
+
+  .filter-btn {
+    background: none;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    padding: 4px 10px;
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    cursor: pointer;
+    color: var(--gray-500);
+    transition: background 0.1s;
+  }
+
+  .filter-btn:hover { background: var(--gray-100); color: var(--gray-700); }
+
+  .filter-btn.active {
+    background: var(--blue);
+    color: var(--white);
+    border-color: var(--blue);
+  }
+
+  /* Quick search */
+  .quick-search-row {
+    margin-bottom: 12px;
+  }
+
+  .queue-search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: Georgia, serif;
+    color: var(--gray-700);
+  }
+
+  .queue-search-input:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+
+  /* Table cells */
+  .patient-name-cell {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .patient-meta-cell {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    margin-top: 2px;
+  }
+
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .empty-title {
+    font-size: 15px;
+    font-family: Georgia, serif;
+    color: var(--gray-700);
+    margin-bottom: 8px;
+  }
+
+  /* Referral rows */
+  .referral-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 0;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+  }
+
+  .referral-patient {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+
+  .referral-from, .referral-reason {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .item-divider {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 4px 0;
+  }
+
+  /* Flow summary */
+  .flow-steps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 8px 0;
+  }
+
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .flow-num {
+    font-size: 24px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    line-height: 1;
+  }
+
+  .flow-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+  }
+
+  .flow-arrow {
+    color: var(--gray-300);
+    font-size: 18px;
+    margin-bottom: 14px;
+  }
+
+  /* Activity log */
+  .activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .activity-item {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-700);
+    line-height: 1.4;
+  }
+
+  .activity-time {
+    color: var(--gray-500);
+    flex-shrink: 0;
+    min-width: 36px;
+  }
+
+  .activity-text { flex: 1; }
+
+  /* Stat card colour for blue */
+  .stat-card.blue { border-top-color: var(--blue); }
+  .stat-card.blue .stat-value { color: var(--blue-dark); }
+
+  @media (max-width: 960px) {
+    .reception-grid { grid-template-columns: 1fr; }
+    .reception-right-col { order: -1; }
+  }
+
+  @media (max-width: 600px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .queue-filter { flex-wrap: wrap; }
+    .flow-steps { flex-wrap: wrap; gap: 12px; }
+    .flow-arrow { display: none; }
+    .pre-arrival-chip { flex-direction: column; align-items: flex-start; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+
+  // Status filter buttons
+  document.querySelectorAll('.filter-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.filter-btn').forEach(function (b) {
+        b.classList.remove('active');
+      });
+      this.classList.add('active');
+
+      var filter = this.getAttribute('data-filter');
+      document.querySelectorAll('#visits-table tbody tr').forEach(function (row) {
+        if (filter === 'all') {
+          row.style.display = '';
+        } else {
+          row.style.display = row.getAttribute('data-status') === filter ? '' : 'none';
+        }
+      });
+    });
+  });
+
+  // Name search filter
+  document.getElementById('queue-search').addEventListener('input', function () {
+    var query = this.value.toLowerCase().trim();
+    document.querySelectorAll('#visits-table tbody tr').forEach(function (row) {
+      var name = row.getAttribute('data-name') || '';
+      row.style.display = name.includes(query) ? '' : 'none';
+    });
+  });
+
+</script>
+{% endblock %}

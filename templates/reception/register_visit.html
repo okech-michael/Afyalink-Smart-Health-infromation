@@ -1,0 +1,540 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Register Visit — AfyaLink{% endblock %}
+
+{% block nav_register_visit %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Register patient visit</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <a href="{% url 'reception_dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="register-layout">
+<div class="register-main">
+
+  <!-- ── STEP 1: Find patient ── -->
+  <div class="card" id="step-find">
+    <p class="card-title">Step 1 &mdash; Find patient</p>
+
+    <div class="search-row">
+      <input
+        type="text"
+        id="patient-search-input"
+        placeholder="Search by name, username or phone number"
+        class="search-input"
+        autocomplete="off"
+      />
+      <button type="button" class="btn btn-primary" id="search-btn">Search</button>
+    </div>
+
+    <!-- Search results -->
+    <div id="search-results" class="search-results" style="display:none;"></div>
+
+    <!-- Selected patient card -->
+    <div id="selected-patient" class="selected-patient-box" style="display:none;">
+      <div class="flex-between">
+        <div>
+          <p class="selected-label">Selected patient</p>
+          <p class="selected-name" id="selected-name"></p>
+          <p class="selected-meta" id="selected-meta"></p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="clear-patient-btn">Change</button>
+      </div>
+
+      <!-- Pre-arrival symptoms if submitted -->
+      <div id="pre-arrival-notice" style="display:none;" class="pre-arrival-notice">
+        <p class="pre-arrival-notice-label">Pre-arrival symptoms submitted</p>
+        <p id="pre-arrival-summary" class="pre-arrival-summary"></p>
+      </div>
+
+    </div>
+
+    <!-- New patient link -->
+    <p class="hint-text mt-16">
+      Patient not found?
+      <a href="{% url 'register' %}">Register them as a new patient</a>
+    </p>
+
+  </div>
+
+
+  <!-- ── STEP 2: Visit details ── -->
+  <div class="card" id="step-visit" style="opacity:0.4;pointer-events:none;">
+    <p class="card-title">Step 2 &mdash; Visit details</p>
+
+    <form method="POST" action="{% url 'reception_register_visit' %}" id="visit-form">
+      {% csrf_token %}
+      <input type="hidden" name="patient_id" id="patient_id_input" value="" />
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="visit_date">Date of visit</label>
+          <input
+            type="date"
+            id="visit_date"
+            name="visit_date"
+            value="{{ today|date:'Y-m-d' }}"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="check_in_time">Check-in time</label>
+          <input
+            type="time"
+            id="check_in_time"
+            name="check_in_time"
+            value="{{ now|time:'H:i' }}"
+            required
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="visit_type">Visit type</label>
+          <select id="visit_type" name="visit_type" required>
+            <option value="outpatient"   selected>Outpatient</option>
+            <option value="emergency">Emergency</option>
+            <option value="maternity">Maternity</option>
+            <option value="follow_up">Follow-up</option>
+            <option value="referral_in">Referral — incoming</option>
+            <option value="vaccination">Vaccination / MCH</option>
+            <option value="lab_only">Lab only</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="payment_mode">Payment mode</label>
+          <select id="payment_mode" name="payment_mode" required>
+            <option value="cash">Cash</option>
+            <option value="nhif">NHIF</option>
+            <option value="insurance">Private insurance</option>
+            <option value="free">Free / waived</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="presenting_complaint">Presenting complaint (brief)</label>
+        <input
+          type="text"
+          id="presenting_complaint"
+          name="presenting_complaint"
+          placeholder="e.g. Fever and cough for 3 days"
+        />
+        <p class="form-hint">
+          Optional — the nurse will record full details during triage.
+          If patient submitted symptoms online, those are already recorded.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label for="referred_from">Referred from (if referral visit)</label>
+        <select id="referred_from" name="referred_from">
+          <option value="">Not a referral</option>
+          {% for facility in facilities %}
+            <option value="{{ facility.id }}">{{ facility.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="reception_notes">Reception notes</label>
+        <textarea
+          id="reception_notes"
+          name="reception_notes"
+          rows="2"
+          placeholder="Any notes for the nurse or doctor (optional)"
+        ></textarea>
+      </div>
+
+      {% if form.non_field_errors %}
+        <p class="form-error">{{ form.non_field_errors|join:", " }}</p>
+      {% endif %}
+
+      <div class="form-actions">
+        <a href="{% url 'reception_dashboard' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="submit-visit-btn" disabled>
+          Register visit &amp; send to triage
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+</div>
+
+
+<!-- ── RIGHT: Today's queue ── -->
+<aside class="register-aside">
+
+  <div class="card">
+    <p class="card-title">Today's queue</p>
+    <p class="text-muted" style="font-size:12px;margin-bottom:12px;">
+      {{ today_visits|length }} patient{{ today_visits|length|pluralize }} registered today
+    </p>
+
+    {% if today_visits %}
+      {% for visit in today_visits %}
+      <div class="queue-row">
+        <div>
+          <p class="queue-row-name">{{ visit.patient.get_full_name }}</p>
+          <p class="queue-row-meta">
+            {{ visit.get_visit_type_display }} &mdash; {{ visit.check_in_time|time:"H:i" }}
+          </p>
+        </div>
+        <span class="badge
+          {% if visit.status == 'complete' %}badge-green
+          {% elif visit.status == 'in_progress' %}badge-blue
+          {% else %}badge-gray{% endif %}">
+          {{ visit.get_status_display }}
+        </span>
+      </div>
+      {% if not forloop.last %}<hr class="item-divider">{% endif %}
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">No visits registered yet today.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <p class="card-title">Pre-arrival alerts today</p>
+    <p class="text-muted" style="font-size:12px;margin-bottom:12px;">
+      Patients who submitted symptoms from home and have not yet checked in.
+    </p>
+
+    {% if unregistered_pre_arrivals %}
+      {% for entry in unregistered_pre_arrivals %}
+      <div class="pre-check-row">
+        <p class="queue-row-name">{{ entry.patient.get_full_name }}</p>
+        <p class="queue-row-meta">
+          {{ entry.body_part|title }} &mdash;
+          <span class="
+            {% if entry.severity == 'critical' %}text-red
+            {% elif entry.severity == 'severe' %}text-amber
+            {% endif %}">
+            {{ entry.severity|title }}
+          </span>
+        </p>
+      </div>
+      {% if not forloop.last %}<hr class="item-divider">{% endif %}
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">No unregistered pre-arrival entries.</p>
+    {% endif %}
+  </div>
+
+</aside>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .register-layout {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .register-main { min-width: 0; }
+
+  /* Search row */
+  .search-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: Georgia, serif;
+    color: var(--gray-700);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(26,92,168,0.12);
+  }
+
+  /* Search results dropdown */
+  .search-results {
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    background: var(--white);
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+
+  .search-result-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    transition: background 0.1s;
+  }
+
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: var(--blue-light); }
+
+  .result-name {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 14px;
+  }
+
+  .result-meta { color: var(--gray-500); font-size: 12px; margin-top: 2px; }
+
+  .result-no-match {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  /* Selected patient box */
+  .selected-patient-box {
+    background: var(--green-light);
+    border: 1px solid var(--green);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 8px;
+  }
+
+  .selected-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+
+  .selected-name {
+    font-size: 16px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+  }
+
+  .selected-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    margin-top: 2px;
+  }
+
+  /* Pre-arrival notice inside selected patient box */
+  .pre-arrival-notice {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(26,122,74,0.2);
+  }
+
+  .pre-arrival-notice-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--blue-dark);
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+
+  .pre-arrival-summary {
+    font-size: 12px;
+    color: var(--gray-700);
+    font-family: Arial, sans-serif;
+    line-height: 1.5;
+  }
+
+  /* Hint text */
+  .hint-text {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+  }
+
+  /* Step 2 form */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-error {
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  /* Aside queue rows */
+  .queue-row, .pre-check-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+  }
+
+  .queue-row-name {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .queue-row-meta {
+    font-size: 11px;
+    color: var(--gray-500);
+    margin-top: 2px;
+  }
+
+  .pre-check-row { flex-direction: column; align-items: flex-start; }
+
+  .item-divider {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 2px 0;
+  }
+
+  .text-red   { color: var(--red); font-weight: bold; }
+  .text-amber { color: #d97706; font-weight: bold; }
+
+  @media (max-width: 860px) {
+    .register-layout { grid-template-columns: 1fr; }
+    .register-aside { order: -1; }
+  }
+
+  @media (max-width: 560px) {
+    .form-row { grid-template-columns: 1fr; }
+    .search-row { flex-direction: column; }
+    .form-actions { flex-direction: column; }
+    .form-actions .btn { text-align: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  var selectedPatientId = null;
+
+  // Patient search
+  document.getElementById('search-btn').addEventListener('click', searchPatient);
+  document.getElementById('patient-search-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); searchPatient(); }
+  });
+
+  function searchPatient() {
+    var query = document.getElementById('patient-search-input').value.trim();
+    if (!query) return;
+
+    var resultsBox = document.getElementById('search-results');
+    resultsBox.style.display = 'block';
+    resultsBox.innerHTML = '<div class="result-no-match">Searching...</div>';
+
+    fetch('/api/patients/search/?q=' + encodeURIComponent(query), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (!data.patients || data.patients.length === 0) {
+        resultsBox.innerHTML = '<div class="result-no-match">No patients found. <a href="{% url "register" %}">Register new patient</a></div>';
+        return;
+      }
+      var html = '';
+      data.patients.forEach(function (p) {
+        html +=
+          '<div class="search-result-item" onclick="selectPatient(' + p.id + ', \'' +
+          escapeHtml(p.full_name) + '\', \'' +
+          escapeHtml(p.meta) + '\', ' +
+          (p.has_pre_arrival ? 'true' : 'false') + ', \'' +
+          escapeHtml(p.pre_arrival_summary || '') + '\')">' +
+          '<p class="result-name">' + escapeHtml(p.full_name) + '</p>' +
+          '<p class="result-meta">' + escapeHtml(p.meta) + '</p>' +
+          '</div>';
+      });
+      resultsBox.innerHTML = html;
+    })
+    .catch(function () {
+      resultsBox.innerHTML = '<div class="result-no-match">Search failed. Please try again.</div>';
+    });
+  }
+
+  function selectPatient(id, name, meta, hasPreArrival, preArrivalSummary) {
+    selectedPatientId = id;
+
+    document.getElementById('patient_id_input').value = id;
+    document.getElementById('selected-name').textContent = name;
+    document.getElementById('selected-meta').textContent = meta;
+    document.getElementById('selected-patient').style.display = 'block';
+    document.getElementById('search-results').style.display = 'none';
+    document.getElementById('patient-search-input').value = '';
+
+    // Show pre-arrival notice if applicable
+    var preArrivalBox = document.getElementById('pre-arrival-notice');
+    if (hasPreArrival) {
+      document.getElementById('pre-arrival-summary').textContent = preArrivalSummary;
+      preArrivalBox.style.display = 'block';
+    } else {
+      preArrivalBox.style.display = 'none';
+    }
+
+    // Unlock step 2
+    var step2 = document.getElementById('step-visit');
+    step2.style.opacity = '1';
+    step2.style.pointerEvents = 'auto';
+    document.getElementById('submit-visit-btn').disabled = false;
+  }
+
+  document.getElementById('clear-patient-btn').addEventListener('click', function () {
+    selectedPatientId = null;
+    document.getElementById('patient_id_input').value = '';
+    document.getElementById('selected-patient').style.display = 'none';
+    document.getElementById('step-visit').style.opacity = '0.4';
+    document.getElementById('step-visit').style.pointerEvents = 'none';
+    document.getElementById('submit-visit-btn').disabled = true;
+  });
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+</script>
+{% endblock %}

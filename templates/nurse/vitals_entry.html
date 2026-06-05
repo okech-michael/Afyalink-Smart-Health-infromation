@@ -1,0 +1,934 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Record Vitals — AfyaLink{% endblock %}
+
+{% block nav_vitals_entry %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Record vitals</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <a href="{% url 'nurse_dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if vitals_saved %}
+<!-- ── CONFIRMATION ── -->
+<div class="confirm-box">
+  <div class="confirm-icon">&#10003;</div>
+  <h2>Vitals recorded</h2>
+  <p>
+    <strong>{{ saved_visit.patient.get_full_name }}</strong> has been sent to the
+    doctor's queue with priority:
+    <span class="badge
+      {% if saved_vitals.priority == 'high' %}badge-red
+      {% elif saved_vitals.priority == 'medium' %}badge-amber
+      {% else %}badge-green{% endif %}">
+      {{ saved_vitals.priority|title }}
+    </span>
+  </p>
+  <div class="confirm-vitals-grid">
+    <div class="cv-item">
+      <p class="cv-label">Blood pressure</p>
+      <p class="cv-value">{{ saved_vitals.blood_pressure|default:"—" }} mmHg</p>
+    </div>
+    <div class="cv-item">
+      <p class="cv-label">Temperature</p>
+      <p class="cv-value">{{ saved_vitals.temperature|default:"—" }} &deg;C</p>
+    </div>
+    <div class="cv-item">
+      <p class="cv-label">Pulse</p>
+      <p class="cv-value">{{ saved_vitals.pulse|default:"—" }} bpm</p>
+    </div>
+    <div class="cv-item">
+      <p class="cv-label">O2 saturation</p>
+      <p class="cv-value">{{ saved_vitals.oxygen_saturation|default:"—" }} %</p>
+    </div>
+    <div class="cv-item">
+      <p class="cv-label">Weight</p>
+      <p class="cv-value">{{ saved_vitals.weight|default:"—" }} kg</p>
+    </div>
+    <div class="cv-item">
+      <p class="cv-label">Priority set</p>
+      <p class="cv-value priority-{{ saved_vitals.priority }}">
+        {{ saved_vitals.priority|title }}
+      </p>
+    </div>
+  </div>
+  <div class="confirm-actions">
+    <a href="{% url 'nurse_dashboard' %}" class="btn btn-secondary">Back to dashboard</a>
+    <a href="{% url 'nurse_vitals_entry' %}" class="btn btn-primary">Record next patient</a>
+  </div>
+</div>
+
+{% else %}
+<!-- ── VITALS FORM ── -->
+
+<div class="vitals-layout">
+<div class="vitals-main">
+
+  <!-- Step 1: Select patient -->
+  <div class="card" id="step-patient">
+    <p class="card-title">Step 1 &mdash; Select patient</p>
+
+    {% if preselected_visit %}
+      <!-- Pre-filled from URL param -->
+      <input type="hidden" name="visit_id_hidden" value="{{ preselected_visit.id }}" />
+      <div class="selected-patient-box">
+        <p class="selected-label">Patient</p>
+        <p class="selected-name">{{ preselected_visit.patient.get_full_name }}</p>
+        <p class="selected-meta">
+          {{ preselected_visit.patient.profile.age|default:"Age unknown" }}
+          {% if preselected_visit.patient.profile.gender %}
+            &mdash; {{ preselected_visit.patient.profile.gender|title }}
+          {% endif %}
+          &mdash; Checked in {{ preselected_visit.check_in_time|time:"H:i" }}
+          &mdash; {{ preselected_visit.get_visit_type_display }}
+        </p>
+        {% if preselected_visit.patient.profile.known_allergies %}
+          <p class="selected-allergy">
+            Allergy: {{ preselected_visit.patient.profile.known_allergies }}
+          </p>
+        {% endif %}
+      </div>
+
+    {% else %}
+      <!-- Select from waiting list -->
+      <div class="form-group">
+        <label for="visit_select">Choose from waiting queue</label>
+        <select id="visit_select" name="visit_id" required onchange="loadPatientInfo(this)">
+          <option value="" disabled selected>-- Select patient --</option>
+          {% for visit in waiting_queue %}
+            <option value="{{ visit.id }}"
+              data-name="{{ visit.patient.get_full_name }}"
+              data-meta="{{ visit.patient.profile.age|default:'' }}{% if visit.patient.profile.gender %}, {{ visit.patient.profile.gender|title }}{% endif %} — Check-in {{ visit.check_in_time|time:'H:i' }}"
+              data-allergy="{{ visit.patient.profile.known_allergies|default:'' }}"
+              data-pre="{{ visit.symptom_entry.symptoms|default:''|truncatechars:100 }}"
+              data-severity="{{ visit.symptom_entry.severity|default:'' }}"
+              data-area="{{ visit.symptom_entry.body_part|default:''|title }}">
+              {{ visit.patient.get_full_name }}
+              {% if visit.symptom_entry %}(Pre-arrival){% endif %}
+              — {{ visit.check_in_time|time:"H:i" }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Patient info preview -->
+      <div id="patient-preview" style="display:none;">
+        <div class="selected-patient-box">
+          <p class="selected-label">Selected patient</p>
+          <p class="selected-name" id="preview-name"></p>
+          <p class="selected-meta" id="preview-meta"></p>
+          <p class="selected-allergy" id="preview-allergy" style="display:none;"></p>
+        </div>
+        <div id="preview-pre-arrival" style="display:none;" class="pre-arrival-ref">
+          <p class="pre-ref-label">Pre-arrival symptoms</p>
+          <p id="preview-area" class="pre-ref-area"></p>
+          <p id="preview-symptoms" class="pre-ref-text"></p>
+        </div>
+      </div>
+
+    {% endif %}
+
+  </div>
+
+
+  <!-- Step 2: Vitals form -->
+  <form method="POST" action="{% url 'nurse_vitals_entry' %}">
+    {% csrf_token %}
+
+    {% if preselected_visit %}
+      <input type="hidden" name="visit_id" value="{{ preselected_visit.id }}" />
+    {% endif %}
+
+    <div class="card">
+      <p class="card-title">Step 2 &mdash; Record vitals</p>
+
+      <!-- Vital signs grid -->
+      <div class="vitals-input-grid">
+
+        <div class="form-group vital-group">
+          <label for="blood_pressure">Blood pressure</label>
+          <div class="input-with-unit">
+            <input
+              type="text"
+              id="blood_pressure"
+              name="blood_pressure"
+              value="{{ form.blood_pressure.value|default:'' }}"
+              placeholder="e.g. 120/80"
+              class="vital-input"
+            />
+            <span class="unit-label">mmHg</span>
+          </div>
+          {% if form.blood_pressure.errors %}
+            <p class="form-error">{{ form.blood_pressure.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group vital-group">
+          <label for="temperature">Temperature</label>
+          <div class="input-with-unit">
+            <input
+              type="number"
+              id="temperature"
+              name="temperature"
+              value="{{ form.temperature.value|default:'' }}"
+              step="0.1"
+              min="30"
+              max="45"
+              placeholder="e.g. 37.2"
+              class="vital-input"
+              oninput="flagTemp(this.value)"
+            />
+            <span class="unit-label">&deg;C</span>
+          </div>
+          <p class="vital-hint" id="temp-hint"></p>
+          {% if form.temperature.errors %}
+            <p class="form-error">{{ form.temperature.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group vital-group">
+          <label for="pulse">Pulse rate</label>
+          <div class="input-with-unit">
+            <input
+              type="number"
+              id="pulse"
+              name="pulse"
+              value="{{ form.pulse.value|default:'' }}"
+              min="20"
+              max="300"
+              placeholder="e.g. 78"
+              class="vital-input"
+              oninput="flagPulse(this.value)"
+            />
+            <span class="unit-label">bpm</span>
+          </div>
+          <p class="vital-hint" id="pulse-hint"></p>
+          {% if form.pulse.errors %}
+            <p class="form-error">{{ form.pulse.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group vital-group">
+          <label for="oxygen_saturation">O2 saturation</label>
+          <div class="input-with-unit">
+            <input
+              type="number"
+              id="oxygen_saturation"
+              name="oxygen_saturation"
+              value="{{ form.oxygen_saturation.value|default:'' }}"
+              min="50"
+              max="100"
+              placeholder="e.g. 98"
+              class="vital-input"
+              oninput="flagO2(this.value)"
+            />
+            <span class="unit-label">%</span>
+          </div>
+          <p class="vital-hint" id="o2-hint"></p>
+          {% if form.oxygen_saturation.errors %}
+            <p class="form-error">{{ form.oxygen_saturation.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group vital-group">
+          <label for="weight">Weight</label>
+          <div class="input-with-unit">
+            <input
+              type="number"
+              id="weight"
+              name="weight"
+              value="{{ form.weight.value|default:'' }}"
+              step="0.1"
+              min="1"
+              max="300"
+              placeholder="e.g. 65.5"
+              class="vital-input"
+            />
+            <span class="unit-label">kg</span>
+          </div>
+          {% if form.weight.errors %}
+            <p class="form-error">{{ form.weight.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group vital-group">
+          <label for="respiratory_rate">Respiratory rate</label>
+          <div class="input-with-unit">
+            <input
+              type="number"
+              id="respiratory_rate"
+              name="respiratory_rate"
+              value="{{ form.respiratory_rate.value|default:'' }}"
+              min="5"
+              max="60"
+              placeholder="e.g. 16"
+              class="vital-input"
+            />
+            <span class="unit-label">breaths/min</span>
+          </div>
+          {% if form.respiratory_rate.errors %}
+            <p class="form-error">{{ form.respiratory_rate.errors|join:", " }}</p>
+          {% endif %}
+        </div>
+
+      </div>
+
+      <!-- Blood sugar (optional) -->
+      <div class="form-row mt-8">
+        <div class="form-group">
+          <label for="blood_sugar">Blood sugar (if tested)</label>
+          <div class="input-with-unit">
+            <input
+              type="number"
+              id="blood_sugar"
+              name="blood_sugar"
+              value="{{ form.blood_sugar.value|default:'' }}"
+              step="0.1"
+              placeholder="e.g. 5.6"
+              class="vital-input"
+            />
+            <span class="unit-label">mmol/L</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="pain_score">Pain score (0 = no pain, 10 = worst)</label>
+          <select id="pain_score" name="pain_score">
+            <option value="">Not assessed</option>
+            {% for i in "0123456789" %}
+              <option value="{{ i }}"
+                {% if form.pain_score.value == i %}selected{% endif %}>
+                {{ i }}
+              </option>
+            {% endfor %}
+            <option value="10" {% if form.pain_score.value == '10' %}selected{% endif %}>10</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- Step 3: Priority & notes -->
+    <div class="card">
+      <p class="card-title">Step 3 &mdash; Set priority &amp; notes</p>
+
+      <div class="form-group">
+        <label>Triage priority</label>
+        <div class="priority-options">
+
+          <label class="priority-option priority-high-opt">
+            <input type="radio" name="priority" value="high"
+              {% if form.priority.value == 'high' %}checked{% endif %} />
+            <span class="priority-opt-box">
+              <span class="priority-opt-label">High</span>
+              <span class="priority-opt-desc">Immediate attention needed</span>
+            </span>
+          </label>
+
+          <label class="priority-option priority-medium-opt">
+            <input type="radio" name="priority" value="medium"
+              {% if form.priority.value == 'medium' or not form.priority.value %}checked{% endif %} />
+            <span class="priority-opt-box">
+              <span class="priority-opt-label">Medium</span>
+              <span class="priority-opt-desc">Can wait — seen within the hour</span>
+            </span>
+          </label>
+
+          <label class="priority-option priority-low-opt">
+            <input type="radio" name="priority" value="low"
+              {% if form.priority.value == 'low' %}checked{% endif %} />
+            <span class="priority-opt-box">
+              <span class="priority-opt-label">Low</span>
+              <span class="priority-opt-desc">Non-urgent — routine</span>
+            </span>
+          </label>
+
+        </div>
+        {% if form.priority.errors %}
+          <p class="form-error">{{ form.priority.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+
+      <div class="form-group mt-16">
+        <label for="nurse_notes">Triage notes for doctor</label>
+        <textarea
+          id="nurse_notes"
+          name="nurse_notes"
+          rows="3"
+          placeholder="Any observations or clinical notes the doctor should see before the consultation..."
+        >{{ form.nurse_notes.value|default:'' }}</textarea>
+        <p class="form-hint">These notes appear on the doctor's dashboard alongside the vitals.</p>
+      </div>
+
+      {% if not preselected_visit %}
+        <!-- Visit ID hidden when selected from dropdown -->
+        <input type="hidden" name="visit_id" id="visit_id_from_select" value="" />
+      {% endif %}
+
+      {% if form.non_field_errors %}
+        <p class="form-error">{{ form.non_field_errors|join:", " }}</p>
+      {% endif %}
+
+      <div class="form-actions">
+        <a href="{% url 'nurse_dashboard' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">
+          Save vitals &amp; send to doctor queue
+        </button>
+      </div>
+
+    </div>
+
+  </form>
+
+</div>
+
+
+<!-- RIGHT: Reference panel -->
+<aside class="vitals-aside">
+
+  <!-- Normal ranges card -->
+  <div class="card">
+    <p class="card-title">Normal ranges (adult)</p>
+    <table class="ref-table">
+      <tbody>
+        <tr>
+          <td>Blood pressure</td>
+          <td class="ref-range">90/60 &ndash; 120/80</td>
+        </tr>
+        <tr>
+          <td>Temperature</td>
+          <td class="ref-range">36.1 &ndash; 37.2 &deg;C</td>
+        </tr>
+        <tr>
+          <td>Pulse</td>
+          <td class="ref-range">60 &ndash; 100 bpm</td>
+        </tr>
+        <tr>
+          <td>O2 saturation</td>
+          <td class="ref-range">&ge; 95 %</td>
+        </tr>
+        <tr>
+          <td>Respiratory rate</td>
+          <td class="ref-range">12 &ndash; 20 /min</td>
+        </tr>
+        <tr>
+          <td>Blood sugar (fasting)</td>
+          <td class="ref-range">3.9 &ndash; 5.6 mmol/L</td>
+        </tr>
+        <tr>
+          <td>Pain score</td>
+          <td class="ref-range">0 = no pain</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Priority guide -->
+  <div class="card">
+    <p class="card-title">Priority guide</p>
+    <div class="priority-guide">
+      <div class="guide-item guide-high">
+        <p class="guide-label">High</p>
+        <p class="guide-desc">
+          O2 &lt; 90%, temp &gt; 39.5&deg;C, BP &gt; 180/110 or &lt; 90/60,
+          pulse &gt; 140 or &lt; 40, severe pain (8&ndash;10), unconscious,
+          chest pain, active bleeding, critical severity reported.
+        </p>
+      </div>
+      <div class="guide-item guide-medium">
+        <p class="guide-label">Medium</p>
+        <p class="guide-desc">
+          Moderate symptoms, stable vitals but patient distressed,
+          pain score 4&ndash;7, moderate severity reported.
+        </p>
+      </div>
+      <div class="guide-item guide-low">
+        <p class="guide-label">Low</p>
+        <p class="guide-desc">
+          All vitals within normal range, mild symptoms,
+          routine follow-up, vaccination, administrative visit.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</aside>
+
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .vitals-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .vitals-main { min-width: 0; }
+
+  /* Selected patient box */
+  .selected-patient-box {
+    background: var(--green-light);
+    border: 1px solid var(--green);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 8px;
+  }
+
+  .selected-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+
+  .selected-name {
+    font-size: 16px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+    margin-bottom: 3px;
+  }
+
+  .selected-meta {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+  }
+
+  .selected-allergy {
+    color: var(--red);
+    font-weight: bold;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    margin-top: 6px;
+  }
+
+  /* Pre-arrival reference box */
+  .pre-arrival-ref {
+    margin-top: 10px;
+    background: var(--blue-light);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-family: Arial, sans-serif;
+  }
+
+  .pre-ref-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--blue-dark);
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+
+  .pre-ref-area {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--blue);
+    margin-bottom: 3px;
+  }
+
+  .pre-ref-text {
+    font-size: 12px;
+    color: var(--gray-700);
+    line-height: 1.5;
+  }
+
+  /* Vitals input grid — 3 columns */
+  .vitals-input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  .vital-group { }
+
+  .input-with-unit {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .vital-input {
+    flex: 1;
+    border-radius: var(--radius) 0 0 var(--radius) !important;
+    border-right: none !important;
+  }
+
+  .vital-input:focus { z-index: 1; }
+
+  .unit-label {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-300);
+    border-left: none;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 9px 10px;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-500);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .vital-hint {
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+    min-height: 16px;
+  }
+
+  .hint-high   { color: var(--red); font-weight: bold; }
+  .hint-low    { color: #d97706; font-weight: bold; }
+  .hint-normal { color: var(--green); }
+
+  /* Form row */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* Priority options */
+  .priority-options {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .priority-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .priority-option input[type="radio"] {
+    margin-top: 4px;
+    width: auto;
+    flex-shrink: 0;
+    accent-color: var(--blue);
+  }
+
+  .priority-opt-box {
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    width: 100%;
+    transition: border-color 0.1s, background 0.1s;
+  }
+
+  .priority-option:hover .priority-opt-box { border-color: var(--blue); }
+
+  .priority-option input:checked ~ .priority-opt-box {
+    border-width: 2px;
+  }
+
+  .priority-high-opt   input:checked ~ .priority-opt-box { border-color: var(--red);   background: var(--red-light);   }
+  .priority-medium-opt input:checked ~ .priority-opt-box { border-color: #d97706;       background: var(--amber-light); }
+  .priority-low-opt    input:checked ~ .priority-opt-box { border-color: var(--green);  background: var(--green-light); }
+
+  .priority-opt-label {
+    display: block;
+    font-weight: bold;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    margin-bottom: 2px;
+  }
+
+  .priority-high-opt   .priority-opt-label { color: var(--red);   }
+  .priority-medium-opt .priority-opt-label { color: #92400e;       }
+  .priority-low-opt    .priority-opt-label { color: var(--green);  }
+
+  .priority-opt-desc {
+    display: block;
+    font-size: 11px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    line-height: 1.4;
+  }
+
+  .form-error {
+    color: var(--red);
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    margin-top: 4px;
+  }
+
+  /* Form actions */
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  /* Confirmation */
+  .confirm-box {
+    max-width: 520px;
+    margin: 40px auto;
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-top: 4px solid var(--green);
+    border-radius: var(--radius);
+    padding: 36px 36px 28px;
+    text-align: center;
+  }
+
+  .confirm-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--green-light);
+    color: var(--green);
+    font-size: 22px;
+    line-height: 48px;
+    text-align: center;
+    margin: 0 auto 16px;
+    border: 2px solid var(--green);
+  }
+
+  .confirm-box h2 {
+    font-size: 20px;
+    font-family: Georgia, serif;
+    color: var(--green);
+    margin-bottom: 12px;
+  }
+
+  .confirm-box p {
+    font-size: 14px;
+    color: var(--gray-700);
+    line-height: 1.6;
+    margin-bottom: 4px;
+  }
+
+  .confirm-vitals-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 20px 0;
+    text-align: left;
+  }
+
+  .cv-item {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+
+  .cv-label {
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+    margin-bottom: 4px;
+  }
+
+  .cv-value {
+    font-size: 16px;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: var(--blue-dark);
+  }
+
+  .priority-high   { color: var(--red); }
+  .priority-medium { color: #d97706; }
+  .priority-low    { color: var(--green); }
+
+  .confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 20px;
+  }
+
+  /* Aside */
+  .ref-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+  }
+
+  .ref-table td {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    vertical-align: middle;
+  }
+
+  .ref-table tr:last-child td { border-bottom: none; }
+  .ref-range { text-align: right; font-weight: bold; color: var(--blue-dark); }
+
+  /* Priority guide */
+  .priority-guide { display: flex; flex-direction: column; gap: 8px; }
+
+  .guide-item {
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    border-left: 3px solid;
+  }
+
+  .guide-high   { background: var(--red-light);   border-left-color: var(--red);   }
+  .guide-medium { background: var(--amber-light);  border-left-color: #d97706;       }
+  .guide-low    { background: var(--green-light);  border-left-color: var(--green);  }
+
+  .guide-label {
+    font-size: 11px;
+    font-weight: bold;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .guide-high   .guide-label { color: var(--red);   }
+  .guide-medium .guide-label { color: #92400e;       }
+  .guide-low    .guide-label { color: var(--green);  }
+
+  .guide-desc {
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    color: var(--gray-700);
+    line-height: 1.5;
+  }
+
+  @media (max-width: 960px) {
+    .vitals-layout { grid-template-columns: 1fr; }
+    .vitals-aside { order: -1; }
+  }
+
+  @media (max-width: 700px) {
+    .vitals-input-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (max-width: 500px) {
+    .vitals-input-grid { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
+    .priority-options { flex-direction: column; }
+    .confirm-vitals-grid { grid-template-columns: 1fr 1fr; }
+    .confirm-actions { flex-direction: column; }
+    .form-actions { flex-direction: column; }
+    .form-actions .btn { text-align: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+
+  // Load patient preview when selecting from dropdown
+  function loadPatientInfo(select) {
+    var opt = select.options[select.selectedIndex];
+    if (!opt.value) return;
+
+    document.getElementById('visit_id_from_select').value = opt.value;
+
+    document.getElementById('preview-name').textContent = opt.getAttribute('data-name');
+    document.getElementById('preview-meta').textContent = opt.getAttribute('data-meta');
+
+    var allergy = opt.getAttribute('data-allergy');
+    var allergyEl = document.getElementById('preview-allergy');
+    if (allergy) {
+      allergyEl.textContent = 'Allergy: ' + allergy;
+      allergyEl.style.display = 'block';
+    } else {
+      allergyEl.style.display = 'none';
+    }
+
+    var preEl  = document.getElementById('preview-pre-arrival');
+    var area   = opt.getAttribute('data-area');
+    var symptoms = opt.getAttribute('data-pre');
+    if (symptoms) {
+      document.getElementById('preview-area').textContent = area;
+      document.getElementById('preview-symptoms').textContent = symptoms;
+      preEl.style.display = 'block';
+    } else {
+      preEl.style.display = 'none';
+    }
+
+    document.getElementById('patient-preview').style.display = 'block';
+  }
+
+  // Temperature flag
+  function flagTemp(val) {
+    var hint = document.getElementById('temp-hint');
+    val = parseFloat(val);
+    if (isNaN(val)) { hint.textContent = ''; return; }
+    if (val >= 39.5) {
+      hint.textContent = 'High fever — consider High priority';
+      hint.className = 'vital-hint hint-high';
+    } else if (val > 37.5) {
+      hint.textContent = 'Elevated — febrile';
+      hint.className = 'vital-hint hint-low';
+    } else if (val < 36.0) {
+      hint.textContent = 'Hypothermia — review';
+      hint.className = 'vital-hint hint-low';
+    } else {
+      hint.textContent = 'Normal';
+      hint.className = 'vital-hint hint-normal';
+    }
+  }
+
+  // Pulse flag
+  function flagPulse(val) {
+    var hint = document.getElementById('pulse-hint');
+    val = parseInt(val);
+    if (isNaN(val)) { hint.textContent = ''; return; }
+    if (val > 140 || val < 40) {
+      hint.textContent = 'Critical — consider High priority';
+      hint.className = 'vital-hint hint-high';
+    } else if (val > 100 || val < 60) {
+      hint.textContent = 'Outside normal range';
+      hint.className = 'vital-hint hint-low';
+    } else {
+      hint.textContent = 'Normal';
+      hint.className = 'vital-hint hint-normal';
+    }
+  }
+
+  // O2 flag
+  function flagO2(val) {
+    var hint = document.getElementById('o2-hint');
+    val = parseInt(val);
+    if (isNaN(val)) { hint.textContent = ''; return; }
+    if (val < 90) {
+      hint.textContent = 'Critical low — High priority';
+      hint.className = 'vital-hint hint-high';
+    } else if (val < 95) {
+      hint.textContent = 'Below normal';
+      hint.className = 'vital-hint hint-low';
+    } else {
+      hint.textContent = 'Normal';
+      hint.className = 'vital-hint hint-normal';
+    }
+  }
+
+</script>
+{% endblock %}

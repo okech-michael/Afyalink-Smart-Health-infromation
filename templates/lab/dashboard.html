@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Lab Dashboard — AfyaLink{% endblock %}
+
+{% block nav_lab_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Laboratory</h1>
+    <p>{{ request.user.profile.facility.name }} &mdash; {{ today|date:"l, j F Y" }}</p>
+  </div>
+  <a href="{% url 'lab_results_entry' %}" class="btn btn-primary">Enter results</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STATS ── -->
+<div class="stat-grid">
+  <div class="stat-card amber">
+    <p class="stat-label">Pending tests</p>
+    <p class="stat-value">{{ pending_count|default:"0" }}</p>
+  </div>
+  <div class="stat-card red">
+    <p class="stat-label">STAT / urgent</p>
+    <p class="stat-value">{{ urgent_count|default:"0" }}</p>
+  </div>
+  <div class="stat-card green">
+    <p class="stat-label">Completed today</p>
+    <p class="stat-value">{{ completed_today|default:"0" }}</p>
+  </div>
+  <div class="stat-card">
+    <p class="stat-label">Abnormal results</p>
+    <p class="stat-value">{{ abnormal_count|default:"0" }}</p>
+  </div>
+</div>
+
+
+<!-- ── MAIN GRID ── -->
+<div class="lab-grid">
+
+  <!-- LEFT: Pending test requests -->
+  <div class="card">
+    <div class="flex-between mb-16">
+      <p class="card-title" style="margin-bottom:0;border:none;padding:0;">
+        Pending test requests
+        <span class="record-count">{{ pending_orders|length }} total</span>
+      </p>
+      <div class="queue-filter">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="stat">STAT</button>
+        <button class="filter-btn" data-filter="urgent">Urgent</button>
+        <button class="filter-btn" data-filter="routine">Routine</button>
+      </div>
+    </div>
+
+    {% if pending_orders %}
+    <div class="table-wrap">
+      <table id="pending-table">
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>Test ordered</th>
+            <th>Ordered by</th>
+            <th>Time ordered</th>
+            <th>Urgency</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in pending_orders %}
+          <tr data-urgency="{{ order.urgency }}">
+            <td>
+              <p class="patient-name-cell">{{ order.visit.patient.get_full_name }}</p>
+              <p class="patient-meta-cell">
+                Visit #{{ order.visit.id }}
+              </p>
+            </td>
+            <td>{{ order.test_name }}</td>
+            <td>Dr. {{ order.ordered_by.get_full_name }}</td>
+            <td>{{ order.date_ordered|date:"H:i" }}</td>
+            <td>
+              <span class="badge
+                {% if order.urgency == 'stat' %}badge-red
+                {% elif order.urgency == 'urgent' %}badge-amber
+                {% else %}badge-gray{% endif %}">
+                {{ order.urgency|upper }}
+              </span>
+            </td>
+            <td>
+              <a href="{% url 'lab_results_entry' %}?order={{ order.id }}"
+                 class="btn btn-primary btn-sm">
+                Enter result
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% else %}
+      <div class="empty-state">
+        <p class="empty-title">No pending tests</p>
+        <p class="text-muted">Test requests from doctors will appear here.</p>
+      </div>
+    {% endif %}
+  </div>
+
+
+  <!-- RIGHT col -->
+  <div class="lab-right-col">
+
+    <!-- Completed today -->
+    <div class="card">
+      <p class="card-title">Completed today</p>
+      {% if completed_orders %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Test</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for order in completed_orders %}
+              <tr>
+                <td>{{ order.visit.patient.get_full_name }}</td>
+                <td>{{ order.test_name }}</td>
+                <td>
+                  {% if order.status == 'abnormal' %}
+                    <span class="badge badge-red">Abnormal</span>
+                  {% else %}
+                    <span class="badge badge-green">Normal</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted">No results entered yet today.</p>
+      {% endif %}
+    </div>
+
+    <!-- Abnormal results requiring attention -->
+    {% if abnormal_results %}
+    <div class="card abnormal-card">
+      <p class="card-title abnormal-title">Abnormal results</p>
+      {% for result in abnormal_results %}
+      <div class="abnormal-item">
+        <p class="abnormal-patient">{{ result.visit.patient.get_full_name }}</p>
+        <p class="abnormal-test">{{ result.test_name }}</p>
+        <p class="abnormal-value">
+          {{ result.result_value }} {{ result.unit }}
+          <span class="text-muted">(Normal: {{ result.normal_range }})</span>
+        </p>
+      </div>
+      {% if not forloop.last %}<hr class="item-divider">{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+
+  .stat-card.red { border-top-color: var(--red); }
+  .stat-card.red .stat-value { color: var(--red); }
+
+  .lab-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .lab-right-col { display: flex; flex-direction: column; }
+
+  .record-count {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: 8px;
+  }
+
+  .queue-filter { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .filter-btn {
+    background: none;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    padding: 4px 10px;
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    cursor: pointer;
+    color: var(--gray-500);
+    transition: background 0.1s;
+  }
+
+  .filter-btn:hover { background: var(--gray-100); }
+  .filter-btn.active { background: var(--blue); color: var(--white); border-color: var(--blue); }
+
+  .patient-name-cell {
+    font-weight: bold;
+    color: var(--blue-dark);
+    font-family: Georgia, serif;
+    font-size: 13px;
+  }
+
+  .patient-meta-cell {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    margin-top: 1px;
+  }
+
+  .empty-state { padding: 40px 20px; text-align: center; }
+  .empty-title { font-size: 15px; font-family: Georgia, serif; color: var(--gray-700); margin-bottom: 8px; }
+
+  .abnormal-card { border-left: 3px solid var(--red); background: var(--red-light); }
+  .abnormal-title { color: var(--red); }
+
+  .abnormal-item { padding: 8px 0; }
+
+  .abnormal-patient {
+    font-size: 13px;
+    font-weight: bold;
+    font-family: Georgia, serif;
+    color: var(--blue-dark);
+    margin-bottom: 2px;
+  }
+
+  .abnormal-test {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-family: Arial, sans-serif;
+    margin-bottom: 2px;
+  }
+
+  .abnormal-value {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--red);
+    font-family: Arial, sans-serif;
+  }
+
+  .item-divider { border: none; border-top: 1px solid var(--gray-200); margin: 4px 0; }
+
+  @media (max-width: 900px) {
+    .lab-grid { grid-template-columns: 1fr; }
+    .lab-right-col { order: -1; }
+  }
+
+  @media (max-width: 600px) {
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  document.querySelectorAll('.filter-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      var filter = this.getAttribute('data-filter');
+      document.querySelectorAll('#pending-table tbody tr').forEach(function (row) {
+        row.style.display = (filter === 'all' || row.getAttribute('data-urgency') === filter) ? '' : 'none';
+      });
+    });
+  });
+</script>
+{% endblock %}
