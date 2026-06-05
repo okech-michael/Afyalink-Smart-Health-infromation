@@ -64,6 +64,8 @@ class Profile(models.Model):
         ('pharmacy',   'Pharmacy'),
         ('billing',    'Billing'),
         ('supervisor', 'Drug Supervisor'),
+        ('supplier',   'Drug Supplier'),
+        ('blood_bank', 'Blood Bank'),
         ('admin',      'System Admin'),
     ]
 
@@ -436,6 +438,87 @@ class StockDispenseLog(models.Model):
 
     def __str__(self):
         return f"{self.drug_stock.drug_name} — {self.quantity_dispensed} dispensed — {self.date}"
+
+
+# ── DRONE DELIVERY ───────────────────────────────────────────────────────────
+
+class Drone(models.Model):
+    STATUS_CHOICES = [
+        ('ready',      'Ready'),
+        ('in_transit', 'In transit'),
+        ('charging',   'Charging'),
+        ('maintenance','Maintenance'),
+    ]
+
+    name               = models.CharField(max_length=150)
+    identifier         = models.CharField(max_length=100, blank=True)
+    facility           = models.ForeignKey(Facility, on_delete=models.SET_NULL, null=True, blank=True, related_name='drones')
+    status             = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ready')
+    current_latitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    current_longitude  = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    last_updated       = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} — {self.identifier or 'unassigned'}"
+
+
+class DroneDelivery(models.Model):
+    PACKAGE_TYPE_CHOICES = [
+        ('drug',      'Drug shipment'),
+        ('blood',     'Blood delivery'),
+        ('vaccine',   'Vaccines'),
+        ('supplies',  'Medical supplies'),
+    ]
+
+    STATUS_CHOICES = [
+        ('scheduled',  'Scheduled'),
+        ('in_transit', 'In transit'),
+        ('delayed',    'Delayed'),
+        ('delivered',  'Delivered'),
+        ('cancelled',  'Cancelled'),
+    ]
+
+    drone                 = models.ForeignKey(Drone, on_delete=models.SET_NULL, null=True, blank=True, related_name='deliveries')
+    package_type          = models.CharField(max_length=20, choices=PACKAGE_TYPE_CHOICES, default='drug')
+    item_name             = models.CharField(max_length=200)
+    description           = models.TextField(blank=True)
+    quantity              = models.PositiveIntegerField(default=1)
+    unit                  = models.CharField(max_length=20, default='units')
+    blood_group           = models.CharField(max_length=5, blank=True)
+    origin_facility       = models.ForeignKey(Facility, on_delete=models.PROTECT, related_name='drone_origin_deliveries')
+    destination_facility  = models.ForeignKey(Facility, on_delete=models.SET_NULL, null=True, blank=True, related_name='drone_destination_deliveries')
+    destination_address   = models.TextField(blank=True)
+    destination_latitude  = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    destination_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    requested_by          = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='requested_drone_deliveries')
+    requested_at          = models.DateTimeField(auto_now_add=True)
+    dispatched_at         = models.DateTimeField(null=True, blank=True)
+    expected_arrival      = models.DateTimeField(null=True, blank=True)
+    delivered_at          = models.DateTimeField(null=True, blank=True)
+    current_status_notes  = models.TextField(blank=True)
+    current_latitude      = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    current_longitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    status                = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
+    updated_at            = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"{self.get_package_type_display()} — {self.item_name} — {self.status}"
+
+    @property
+    def tracking_coordinates(self):
+        if self.current_latitude and self.current_longitude:
+            return {'lat': float(self.current_latitude), 'lng': float(self.current_longitude)}
+        return None
+
+    @property
+    def is_blood_delivery(self):
+        return self.package_type == 'blood'
 
 
 # ── DRUG SHORTAGE ALERT (AI prediction) ────────────────────────────────────────

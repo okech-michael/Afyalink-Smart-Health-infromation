@@ -94,6 +94,18 @@
           <a href="{% url 'supervisor_stock_entry' %}"  class="nav-link {% block nav_stock_entry %}{% endblock %}">Log delivery</a>
           <a href="{% url 'supervisor_stock_report' %}" class="nav-link {% block nav_stock_report %}{% endblock %}">Stock report</a>
 
+        {% elif role == 'supplier' %}
+          <p class="nav-section-label">Supplier</p>
+          <a href="{% url 'supplier_dashboard' %}" class="nav-link {% block nav_supplier_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'drone_delivery_dashboard' %}" class="nav-link {% block nav_drone_deliveries %}{% endblock %}">Drone deliveries</a>
+          <a href="{% url 'drone_delivery_create' %}" class="nav-link {% block nav_request_delivery %}{% endblock %}">Request drone</a>
+
+        {% elif role == 'blood_bank' %}
+          <p class="nav-section-label">Blood Bank</p>
+          <a href="{% url 'blood_bank_dashboard' %}" class="nav-link {% block nav_blood_bank_dashboard %}{% endblock %}">Dashboard</a>
+          <a href="{% url 'drone_delivery_dashboard' %}" class="nav-link {% block nav_drone_deliveries %}{% endblock %}">Drone deliveries</a>
+          <a href="{% url 'drone_delivery_create' %}" class="nav-link {% block nav_request_delivery %}{% endblock %}">Request drone</a>
+
         {% elif role == 'admin' %}
           <p class="nav-section-label">Administration</p>
           <a href="{% url 'admin_panel_dashboard' %}"           class="nav-link {% block nav_admin_dashboard %}{% endblock %}">Dashboard</a>

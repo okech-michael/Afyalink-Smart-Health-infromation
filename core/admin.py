@@ -22,6 +22,8 @@ from .models import (
     SymptomEntry,
     Visit,
     Vitals,
+    Drone,
+    DroneDelivery,
 )
 
 
@@ -213,6 +215,21 @@ class OutbreakAlertAdmin(admin.ModelAdmin):
     list_filter    = ['resolved', 'county', 'sub_county']
     search_fields  = ['diagnosis', 'county', 'sub_county']
     date_hierarchy = 'created_at'
+
+
+@admin.register(Drone)
+class DroneAdmin(admin.ModelAdmin):
+    list_display   = ['name', 'identifier', 'facility', 'status', 'last_updated']
+    list_filter    = ['status', 'facility']
+    search_fields  = ['name', 'identifier']
+
+
+@admin.register(DroneDelivery)
+class DroneDeliveryAdmin(admin.ModelAdmin):
+    list_display   = ['package_type', 'item_name', 'quantity', 'status', 'origin_facility', 'destination_facility', 'requested_by', 'requested_at']
+    list_filter    = ['package_type', 'status', 'origin_facility', 'destination_facility']
+    search_fields  = ['item_name', 'description', 'origin_facility__name', 'destination_facility__name']
+    date_hierarchy = 'requested_at'
 
 
 @admin.register(DrugShortageAlert)

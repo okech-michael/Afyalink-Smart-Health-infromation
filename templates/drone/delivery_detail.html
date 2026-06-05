@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delivery Details — AfyaLink{% endblock %}
+
+{% block nav_drone_deliveries %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Delivery details</h1>
+    <p>{{ delivery.item_name }} — {{ delivery.get_package_type_display }}</p>
+  </div>
+  <a href="{% url 'drone_delivery_dashboard' %}" class="btn btn-secondary">Back to deliveries</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <p class="card-title">Summary</p>
+  <div class="summary-grid">
+    <div>
+      <strong>Origin</strong>
+      <p>{{ delivery.origin_facility.name }}</p>
+    </div>
+    <div>
+      <strong>Destination</strong>
+      <p>{{ delivery.destination_facility.name|default:delivery.destination_address|default:'—' }}</p>
+    </div>
+    <div>
+      <strong>Status</strong>
+      <p>{{ delivery.get_status_display }}</p>
+    </div>
+    <div>
+      <strong>Requested by</strong>
+      <p>{{ delivery.requested_by.get_full_name|default:delivery.requested_by.username }}</p>
+    </div>
+    <div>
+      <strong>Requested at</strong>
+      <p>{{ delivery.requested_at|date:'j M Y H:i' }}</p>
+    </div>
+    <div>
+      <strong>Current position</strong>
+      <p>
+        {% if delivery.current_latitude and delivery.current_longitude %}
+          {{ delivery.current_latitude }}, {{ delivery.current_longitude }}
+        {% else %}
+          Not available
+        {% endif %}
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <p class="card-title">Tracking</p>
+  <ul class="detail-list">
+    <li><strong>Package</strong> {{ delivery.item_name }}</li>
+    <li><strong>Type</strong> {{ delivery.get_package_type_display }}</li>
+    <li><strong>Quantity</strong> {{ delivery.quantity }} {{ delivery.unit }}</li>
+    <li><strong>Blood group</strong> {{ delivery.blood_group|default:'N/A' }}</li>
+    <li><strong>Current notes</strong> {{ delivery.current_status_notes|default:'None' }}</li>
+  </ul>
+</div>
+
+{% if can_update %}
+<div class="card">
+  <p class="card-title">Update status</p>
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-grid">
+      <div class="form-field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          <option value="scheduled" {% if delivery.status == 'scheduled' %}selected{% endif %}>Scheduled</option>
+          <option value="in_transit" {% if delivery.status == 'in_transit' %}selected{% endif %}>In transit</option>
+          <option value="delayed" {% if delivery.status == 'delayed' %}selected{% endif %}>Delayed</option>
+          <option value="delivered" {% if delivery.status == 'delivered' %}selected{% endif %}>Delivered</option>
+          <option value="cancelled" {% if delivery.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="drone_id">Assign drone</label>
+        <select id="drone_id" name="drone_id">
+          <option value="">-- keep current --</option>
+          {% for drone in drones %}
+          <option value="{{ drone.id }}" {% if delivery.drone and delivery.drone.id == drone.id %}selected{% endif %}>{{ drone.name }} ({{ drone.get_status_display }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="current_latitude">Current latitude</label>
+        <input id="current_latitude" name="current_latitude" value="{{ delivery.current_latitude|default:'' }}" />
+      </div>
+      <div class="form-field">
+        <label for="current_longitude">Current longitude</label>
+        <input id="current_longitude" name="current_longitude" value="{{ delivery.current_longitude|default:'' }}" />
+      </div>
+      <div class="form-field form-field-full">
+        <label for="current_status_notes">Notes</label>
+        <textarea id="current_status_notes" name="current_status_notes" rows="3">{{ delivery.current_status_notes }}</textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Update delivery</button>
+      <a href="{% url 'drone_delivery_dashboard' %}" class="btn btn-secondary">Back</a>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

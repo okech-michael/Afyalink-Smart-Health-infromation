@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Drone Deliveries — AfyaLink{% endblock %}
+
+{% block nav_drone_deliveries %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Drone delivery tracking</h1>
+    <p>Monitor all active drone deliveries from your facility.</p>
+  </div>
+  <a href="{% url 'drone_delivery_create' %}" class="btn btn-primary">New request</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <p class="card-title">Delivery queue</p>
+  {% if deliveries %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Package</th>
+          <th>Type</th>
+          <th>Origin</th>
+          <th>Destination</th>
+          <th>Status</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for delivery in deliveries %}
+        <tr>
+          <td>{{ delivery.item_name }}</td>
+          <td>{{ delivery.get_package_type_display }}</td>
+          <td>{{ delivery.origin_facility.name }}</td>
+          <td>{{ delivery.destination_facility.name|default:delivery.destination_address|default:'—' }}</td>
+          <td>{{ delivery.get_status_display }}</td>
+          <td>{{ delivery.updated_at|date:'j M H:i' }}</td>
+          <td><a href="{% url 'drone_delivery_detail' delivery_id=delivery.id %}">Details</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-state">
+      <p class="empty-title">No drone deliveries found.</p>
+      <p class="text-muted">Start by creating a new delivery request or ask your team to assign a drone.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Drone Delivery Request — AfyaLink{% endblock %}
+
+{% block nav_drone_deliveries %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Request drone delivery</h1>
+    <p>Create a new drug or blood delivery for your facility.</p>
+  </div>
+  <a href="{% url 'drone_delivery_dashboard' %}" class="btn btn-secondary">Cancel</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <p class="card-title">Delivery information</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="form-grid">
+      {% for field in form %}
+        <div class="form-field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
+          {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Submit request</button>
+      <a href="{% url 'drone_delivery_dashboard' %}" class="btn btn-secondary">Back</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -165,6 +165,27 @@ urlpatterns = [
          views.stock_report,
          name='supervisor_stock_report'),
 
+    # ── SUPPLIER / BLOOD BANK ──────────────────────────────────────────────
+    path('supplier/',
+         views.supplier_dashboard,
+         name='supplier_dashboard'),
+
+    path('blood-bank/',
+         views.blood_bank_dashboard,
+         name='blood_bank_dashboard'),
+
+    path('drone/deliveries/',
+         views.drone_delivery_dashboard,
+         name='drone_delivery_dashboard'),
+
+    path('drone/deliveries/new/',
+         views.drone_delivery_create,
+         name='drone_delivery_create'),
+
+    path('drone/deliveries/<int:delivery_id>/',
+         views.drone_delivery_detail,
+         name='drone_delivery_detail'),
+
 
     # ── ADMIN PANEL ───────────────────────────────────────────────────────
     path('admin-panel/',

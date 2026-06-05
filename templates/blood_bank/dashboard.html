@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Blood Bank Dashboard — AfyaLink{% endblock %}
+
+{% block nav_blood_bank_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Blood bank dashboard</h1>
+    <p>{{ facility.name|default:'No facility assigned' }} &mdash; {{ today|date:'l, j F Y' }}</p>
+  </div>
+  <a href="{% url 'drone_delivery_create' %}" class="btn btn-primary">Request blood delivery</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="stat-grid">
+  <div class="stat-card">
+    <p class="stat-label">Deliveries requested</p>
+    <p class="stat-value">{{ deliveries|length|default:'0' }}</p>
+  </div>
+  <div class="stat-card green">
+    <p class="stat-label">In transit</p>
+    <p class="stat-value">{{ in_transit_count|default:'0' }}</p>
+  </div>
+  <div class="stat-card amber">
+    <p class="stat-label">Delivered</p>
+    <p class="stat-value">{{ delivered_count|default:'0' }}</p>
+  </div>
+</div>
+
+<div class="card">
+  <p class="card-title">Recent blood delivery requests</p>
+  {% if deliveries %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Blood group</th>
+          <th>Qty</th>
+          <th>Destination</th>
+          <th>Status</th>
+          <th>Requested</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for delivery in deliveries %}
+        <tr>
+          <td>{{ delivery.blood_group|default:'—' }}</td>
+          <td>{{ delivery.quantity }} {{ delivery.unit }}</td>
+          <td>{{ delivery.destination_facility.name|default:delivery.destination_address|default:'—' }}</td>
+          <td>{{ delivery.get_status_display }}</td>
+          <td>{{ delivery.requested_at|date:'j M Y H:i' }}</td>
+          <td><a href="{% url 'drone_delivery_detail' delivery_id=delivery.id %}">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-state">
+      <p class="empty-title">No blood delivery requests yet.</p>
+      <p class="text-muted">Request a blood shipment using the button above.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

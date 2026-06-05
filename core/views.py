@@ -16,6 +16,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from .forms import (
     ConsultationForm,
+    DroneDeliveryForm,
     EmergencyAlarmForm,
     PatientRegistrationForm,
     ReferralForm,
@@ -26,6 +27,8 @@ from .forms import (
 from .models import (
     ActivityLog,
     Consultation,
+    Drone,
+    DroneDelivery,
     DrugStock,
     EmergencyAlarm,
     Facility,
@@ -180,6 +183,8 @@ def register_view(request):
         'pharmacy':   'pharmacy',
         'billing':    'billing',
         'supervisor': 'supervisor',
+        'supplier':   'supplier',
+        'blood_bank': 'blood_bank',
         'admin':      'admin',
     }
 
@@ -228,9 +233,43 @@ def role_redirect_view(request):
         'pharmacy':   'pharmacy_dashboard',
         'billing':    'billing_dashboard',
         'supervisor': 'supervisor_dashboard',
+        'supplier':   'supplier_dashboard',
+        'blood_bank': 'blood_bank_dashboard',
         'admin':      'admin_panel_dashboard',
     }
     return redirect(destinations.get(role, 'patient_dashboard'))
+
+
+@login_required
+@role_required('supplier')
+def supplier_dashboard(request):
+    facility = request.user.profile.facility
+    deliveries = DroneDelivery.objects.filter(origin_facility=facility).order_by('-requested_at') if facility else DroneDelivery.objects.none()
+    drone_count = Drone.objects.filter(facility=facility).count() if facility else 0
+    pending_dispatch_count = deliveries.filter(status='scheduled').count() if facility else 0
+    return render(request, 'supplier/dashboard.html', {
+        'today': timezone.now(),
+        'facility': facility,
+        'drone_count': drone_count,
+        'deliveries': deliveries,
+        'pending_dispatch_count': pending_dispatch_count,
+    })
+
+
+@login_required
+@role_required('blood_bank')
+def blood_bank_dashboard(request):
+    facility = request.user.profile.facility
+    deliveries = DroneDelivery.objects.filter(origin_facility=facility).order_by('-requested_at') if facility else DroneDelivery.objects.none()
+    in_transit_count = deliveries.filter(status='in_transit').count() if facility else 0
+    delivered_count = deliveries.filter(status='delivered').count() if facility else 0
+    return render(request, 'blood_bank/dashboard.html', {
+        'today': timezone.now(),
+        'facility': facility,
+        'deliveries': deliveries,
+        'in_transit_count': in_transit_count,
+        'delivered_count': delivered_count,
+    })
 
 
 # ── PATIENT ───────────────────────────────────────────────────────────────────
@@ -1365,6 +1404,103 @@ def stock_report(request):
             'out':              stock_items.filter(status='out').count(),
             'total_deliveries': StockDelivery.objects.filter(facility=facility).count(),
         },
+    })
+
+
+
+
+
+@login_required
+@role_required('supplier', 'blood_bank', 'supervisor', 'admin')
+def drone_delivery_dashboard(request):
+    role     = request.user.profile.role
+    facility = request.user.profile.facility
+
+    deliveries = DroneDelivery.objects.all() if role == 'admin' else DroneDelivery.objects.filter(
+        Q(origin_facility=facility) | Q(destination_facility=facility) | Q(requested_by=request.user)
+    )
+
+    if role == 'supplier':
+        deliveries = deliveries.filter(package_type='drug')
+    elif role == 'blood_bank':
+        deliveries = deliveries.filter(package_type='blood')
+
+    deliveries = deliveries.order_by('-updated_at')
+    drones = Drone.objects.filter(facility=facility) if facility else Drone.objects.none()
+
+    return render(request, 'drone/dashboard.html', {
+        'deliveries': deliveries,
+        'drones':     drones,
+        'role':       role,
+    })
+
+
+@login_required
+@role_required('supplier', 'blood_bank', 'supervisor', 'admin')
+def drone_delivery_create(request):
+    role = request.user.profile.role
+    if request.method == 'POST':
+        form = DroneDeliveryForm(request.POST)
+        if form.is_valid():
+            delivery = form.save(commit=False)
+            if role in ['supplier', 'blood_bank']:
+                delivery.origin_facility = request.user.profile.facility
+            delivery.requested_by = request.user
+            delivery.status = 'scheduled'
+            delivery.save()
+            messages.success(request, 'Drone delivery request has been created.')
+            return redirect('drone_delivery_detail', delivery_id=delivery.id)
+    else:
+        initial = {
+            'origin_facility': request.user.profile.facility,
+            'package_type': 'blood' if role == 'blood_bank' else 'drug' if role == 'supplier' else 'drug',
+        }
+        form = DroneDeliveryForm(initial=initial)
+
+    return render(request, 'drone/delivery_form.html', {
+        'form': form,
+        'role': role,
+        'creating': True,
+    })
+
+
+@login_required
+@role_required('supplier', 'blood_bank', 'supervisor', 'admin')
+def drone_delivery_detail(request, delivery_id):
+    delivery = get_object_or_404(DroneDelivery, id=delivery_id)
+    facility = request.user.profile.facility
+    role     = request.user.profile.role
+    can_update = role in ['supplier', 'blood_bank', 'supervisor', 'admin']
+
+    if request.method == 'POST' and can_update:
+        status = request.POST.get('status', delivery.status)
+        note   = request.POST.get('current_status_notes', '')
+        drone_id = request.POST.get('drone_id')
+        if drone_id:
+            delivery.drone = get_object_or_404(Drone, id=drone_id)
+            if status == 'in_transit':
+                delivery.drone.status = 'in_transit'
+            delivery.drone.save()
+        if status != delivery.status:
+            delivery.status = status
+            if status == 'in_transit' and not delivery.dispatched_at:
+                delivery.dispatched_at = timezone.now()
+            if status == 'delivered':
+                delivery.delivered_at = timezone.now()
+        if note:
+            delivery.current_status_notes = note
+        delivery.current_latitude = request.POST.get('current_latitude') or delivery.current_latitude
+        delivery.current_longitude = request.POST.get('current_longitude') or delivery.current_longitude
+        delivery.save()
+        messages.success(request, 'Drone delivery status has been updated.')
+        return redirect('drone_delivery_detail', delivery_id=delivery.id)
+
+    drones = Drone.objects.filter(facility=facility) if facility else Drone.objects.none()
+    return render(request, 'drone/delivery_detail.html', {
+        'delivery': delivery,
+        'role': role,
+        'drones': drones,
+        'can_update': can_update,
     })
 
 

@@ -5,6 +5,7 @@ from django.contrib.auth import authenticate
 
 from .models import (
     Consultation,
+    DroneDelivery,
     EmergencyAlarm,
     Facility,
     LabResult,
@@ -259,6 +260,45 @@ class ConsultationForm(forms.ModelForm):
             'doctor_notes':      forms.Textarea(attrs={'rows': 2}),
             'followup_date':     forms.DateInput(attrs={'type': 'date'}),
         }
+
+
+class DroneDeliveryForm(forms.ModelForm):
+    class Meta:
+        model = DroneDelivery
+        fields = [
+            'package_type', 'item_name', 'description', 'quantity', 'unit',
+            'blood_group', 'origin_facility', 'destination_facility',
+            'destination_address', 'destination_latitude', 'destination_longitude',
+            'expected_arrival',
+        ]
+        widgets = {
+            'description':          forms.Textarea(attrs={'rows': 3}),
+            'destination_address':  forms.Textarea(attrs={'rows': 2}),
+            'expected_arrival':     forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        from .models import DroneDelivery
+        super().__init__(*args, **kwargs)
+        self.Meta.model = DroneDelivery
+        self.fields['blood_group'] = forms.ChoiceField(
+            choices=[('', '-- Select blood group --')] + Profile.BLOOD_GROUP_CHOICES,
+            required=False,
+        )
+        self.fields['origin_facility'].queryset = Facility.objects.filter(is_active=True).order_by('name')
+        self.fields['destination_facility'].queryset = Facility.objects.filter(is_active=True).order_by('name')
+        self.fields['destination_latitude'].required = False
+        self.fields['destination_longitude'].required = False
+        self.fields['destination_address'].required = False
+        self.fields['expected_arrival'].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        package_type = cleaned_data.get('package_type')
+        blood_group = cleaned_data.get('blood_group')
+        if package_type == 'blood' and not blood_group:
+            self.add_error('blood_group', 'Blood group is required for blood deliveries.')
+        return cleaned_data
 
 
 # ── REFERRAL ──────────────────────────────────────────────────────────────────

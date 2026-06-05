@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Supplier Dashboard — AfyaLink{% endblock %}
+
+{% block nav_supplier_dashboard %}active{% endblock %}
+
+{% block page_header %}
+<div class="page-header flex-between">
+  <div>
+    <h1>Supplier dashboard</h1>
+    <p>{{ facility.name|default:'No facility assigned' }} &mdash; {{ today|date:'l, j F Y' }}</p>
+  </div>
+  <a href="{% url 'drone_delivery_create' %}" class="btn btn-primary">Request drone delivery</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="stat-grid">
+  <div class="stat-card">
+    <p class="stat-label">Active drones</p>
+    <p class="stat-value">{{ drone_count|default:'0' }}</p>
+  </div>
+  <div class="stat-card green">
+    <p class="stat-label">Deliveries requested</p>
+    <p class="stat-value">{{ deliveries|length|default:'0' }}</p>
+  </div>
+  <div class="stat-card amber">
+    <p class="stat-label">Pending dispatch</p>
+    <p class="stat-value">{{ pending_dispatch_count|default:'0' }}</p>
+  </div>
+</div>
+
+<div class="card">
+  <p class="card-title">Recent drone deliveries</p>
+  {% if deliveries %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Package</th>
+          <th>Type</th>
+          <th>Qty</th>
+          <th>Status</th>
+          <th>Requested</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for delivery in deliveries %}
+        <tr>
+          <td>{{ delivery.item_name }}</td>
+          <td>{{ delivery.get_package_type_display }}</td>
+          <td>{{ delivery.quantity }} {{ delivery.unit }}</td>
+          <td>{{ delivery.get_status_display }}</td>
+          <td>{{ delivery.requested_at|date:'j M Y H:i' }}</td>
+          <td><a href="{% url 'drone_delivery_detail' delivery_id=delivery.id %}">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-state">
+      <p class="empty-title">No deliveries yet.</p>
+      <p class="text-muted">Create your first drone delivery request to begin tracking.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
