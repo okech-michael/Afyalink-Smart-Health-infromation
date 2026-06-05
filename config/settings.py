@@ -1,27 +1,33 @@
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
 # ── BASE ──────────────────────────────────────────────────────────────────────
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def get_env_setting(name, default=None, required=False):
+    value = os.environ.get(name, default)
+    if required and not value:
+        raise ImproperlyConfigured(f"The {name} environment variable is required.")
+    return value
+
+
 # ── SECURITY ──────────────────────────────────────────────────────────────────
-# IMPORTANT: Replace this with your own secret key before deployment.
+# IMPORTANT: Supply a strong secret key via the DJANGO_SECRET_KEY environment variable.
 # Generate one with:
 #   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 
-SECRET_KEY = 'replace-this-with-your-own-secret-key-before-running'
+SECRET_KEY = get_env_setting('DJANGO_SECRET_KEY', 'replace-this-with-your-own-secret-key-before-running')
 
-# Set to False in production and set ALLOWED_HOSTS properly
-DEBUG = True
+# Set DJANGO_DEBUG=False in production
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    'testserver',
-    # Add your production domain here when deploying
-    # 'afyalink.yourdomain.com',
+    host.strip()
+    for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
 ]
 
 
@@ -42,6 +48,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -84,14 +91,26 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # ── DATABASE ──────────────────────────────────────────────────────────────────
 # SQLite is fine for development and the demo.
-# Switch to PostgreSQL for production.
+# Railway can use a DATABASE_URL environment variable for Postgres in production.
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    try:
+        import dj_database_url
+
+        DATABASES = {
+            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+        }
+    except ImportError:
+        raise ImproperlyConfigured('dj-database-url is required when DATABASE_URL is set')
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
 
 # PostgreSQL example (uncomment and fill in for production):
 # DATABASES = {
@@ -133,6 +152,7 @@ STATICFILES_DIRS = [
 ]
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # collected for production with collectstatic
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 
 # ── MEDIA FILES ───────────────────────────────────────────────────────────────

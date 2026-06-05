@@ -97,3 +97,26 @@ The feature should reuse existing core components for:
 - visit and billing history where needed
 
 This separation makes it easier to develop, maintain, and eventually scale the home visit feature independently.
+
+## Railway deployment
+
+This project is prepared for Railway hosting with:
+
+- `Procfile` to run Gunicorn via `config.wsgi`
+- `requirements.txt` for Python package installation
+- `runtime.txt` to pin the Python version
+- `config/settings.py` configured for environment-based secrets, debug mode, allowed hosts, and `DATABASE_URL`
+- `whitenoise` enabled for static file delivery
+
+### Railway setup
+
+1. Add the repository to Railway.
+2. Set Railway environment variables, including:
+   - `DJANGO_SECRET_KEY`
+   - `DJANGO_DEBUG=False`
+   - `DJANGO_ALLOWED_HOSTS=your-railway-app-url`
+   - `DATABASE_URL` (Postgres connection string)
+3. Run migrations after deployment:
+   - `python manage.py migrate`
+
+For local setup, copy `.env.example` to `.env` and update the values.
