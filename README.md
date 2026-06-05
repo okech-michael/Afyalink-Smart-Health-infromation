@@ -1,122 +1,98 @@
-# AfyaLink
+# AfyaLink — Clinical & Logistics Platform
 
-AfyaLink is a hospital management platform with role-based dashboards for patients, reception, nurses, doctors, laboratory, pharmacy, billing, supervisors, and system administration.
+AfyaLink is a Django-based health facility operations and logistics platform. It provides role-based dashboards, patient-facing flows, clinical workflows, stock and supply management, and logistics features (including drone-based delivery tracking). The project is intended to support facility networks, suppliers, and blood banks.
 
-## New Medic Home Visit Feature
+Key capabilities
 
-This project is being extended with a modular **Medic Home Visit** feature. The goal is to allow patients to request home visits, match those requests with nearby qualified medics, schedule dispatch, and track completion.
+- Role-based dashboards: patient, reception, nurse, doctor, lab, pharmacy, billing, supervisor, supplier, blood bank, and admin.
+- Clinical workflows: visit registration, triage, consultations, prescriptions, lab results, and billing.
+- Stock management: drug stock tracking, deliveries, dispense logs and shortage alerts.
+- Logistics: drone fleet and drone delivery requests (drug/blood/supplies) with tracking and assignment.
+- Notifications: in-app messages and hooks for SMS/push (configurable integrations).
+- Admin: Django admin integrations for all models.
 
-### Why this belongs in the README
-- Provides a high-level architecture overview for collaborators
-- Documents the new feature boundary and integration points
-- Helps you own and scale the feature independently
+What was added recently
 
-## Architecture
+- Drone delivery feature: `Drone` and `DroneDelivery` models, supplier/blood-bank dashboards, delivery request and tracking views, forms and templates, and admin registration.
+- Registration updates: `supplier` and `blood_bank` staff roles included in registration and redirects.
 
-The new home visit feature is designed as a separate module with its own models, APIs, and UI flows, while reusing shared data where appropriate.
+Code structure (important files)
 
-```mermaid
-flowchart TB
-  subgraph ExistingCore[AfyaLink Core System]
-    Auth[Auth + User Profiles]
-    Facility[Facility Directory + Geodata]
-    Visit[Visit / Consultation / Billing]
-    Referral[Referral / Emergency]
-    UI[Role-based UI Layers]
-  end
+- `config/` — Django project settings and WSGI/ASGI entry points.
+- `core/` — main app with models, forms, views, urls, admin, and migrations.
+  - `core/models.py` — domain models (Facility, Profile, Visit, DrugStock, Drone, DroneDelivery, ...).
+  - `core/forms.py` — forms including `DroneDeliveryForm`.
+  - `core/views.py` — role dashboards and drone delivery views.
+  - `core/urls.py` — routes for dashboards and APIs.
+  - `core/admin.py` — admin registration for Drone and DroneDelivery.
+- `templates/` — Jinja-style Django templates for each role and drone pages (`templates/drone/`, `templates/supplier/`, `templates/blood_bank/`).
 
-  subgraph NewFeature[Medic Home Visit Module]
-    MedicProfile[Medic Registration + Credentials]
-    Request[Home Visit Request]
-    Match[Medic Matching + Nearby Search]
-    Dispatch[Visit Scheduling / Assignment]
-    Tracking[Visit Status + Completion]
-    Notifications[Alerts / SMS / Push]
-    MedicDashboard[Medic Dashboard / Task List]
-    PatientPortal[Patient Home Visit Request UI]
-  end
+Database & migrations
 
-  subgraph Integration[Ownership Boundary]
-    API[HomeVisit API]
-    Models[HomeVisit Models]
-  end
+- The app uses Django ORM (designed for Python 3.11, Django 5.x). After model changes run:
 
-  Auth --> UI
-  Facility --> UI
-  Visit --> UI
-  Referral --> UI
-
-  PatientPortal --> Request
-  Request --> Match
-  Request --> Dispatch
-  Match --> MedicProfile
-  Dispatch --> Tracking
-  Tracking --> Notifications
-  MedicDashboard --> Tracking
-  PatientPortal --> Notifications
-
-  API --> Request
-  API --> MedicProfile
-  API --> Tracking
-  API --> Notifications
-  Models --> MedicProfile
-  Models --> Request
-  Models --> Tracking
-
-  Facility --> Match
-  Referral --> API
-  Visit --> API
-  Auth --> MedicDashboard
-  Auth --> PatientPortal
-
-  classDef existing fill:#f0f4ff,stroke:#355c7d,stroke-width:1px
-  classDef feature fill:#e7ffe7,stroke:#2f8f33,stroke-width:1px
-  classDef boundary fill:#fff7e6,stroke:#d97706,stroke-width:1px
-  class ExistingCore existing
-  class NewFeature feature
-  class Integration boundary
+```bash
+python -m venv .venv
+source .venv/Scripts/activate  # Windows: .venv\\Scripts\\activate
+pip install -r requirements.txt
+python manage.py migrate
 ```
 
-## Feature ownership
+- A migration was created for the drone delivery models: `core/migrations/0003_drone_alter_profile_role_dronedelivery_and_more.py`.
 
-The new module should own:
+Environment & configuration
 
-- `Medic` registration and profile data
-- `HomeVisitRequest` lifecycle
-- medic matching and dispatch logic
-- visit status tracking and completion
-- notification/alert delivery for requests and assignments
+- Use environment variables for secrets and production settings. Copy `.env.example` to `.env` for local development and set values.
+- Important env vars:
+  - `DJANGO_SECRET_KEY`
+  - `DJANGO_DEBUG` (set `False` in production)
+  - `DATABASE_URL` (Postgres recommended for production)
+  - `ALLOWED_HOSTS` / `DJANGO_ALLOWED_HOSTS`
+  - Third-party keys (AfricasTalking, Firebase, etc.) as needed by your integrations
 
-## Integration points
+Running locally
 
-The feature should reuse existing core components for:
+```bash
+python manage.py runserver
+# Create a superuser to access the admin:
+python manage.py createsuperuser
+```
 
-- authentication and role management
-- facility location and service data
-- patient referral and emergency workflows
-- visit and billing history where needed
+Deployment (Railway)
 
-This separation makes it easier to develop, maintain, and eventually scale the home visit feature independently.
+- The repository has been prepared for Railway: `Procfile`, `requirements.txt`, and `runtime.txt` are present. Settings read environment variables and support `DATABASE_URL`.
+- Typical Railway steps:
 
-## Railway deployment
+1. Connect the repo in Railway and set environment variables.
+2. Ensure `DATABASE_URL` points to a managed Postgres database.
+3. On first deploy run `python manage.py migrate` and `python manage.py collectstatic --noinput` (Railway runs release commands or you can run them via the console).
 
-This project is prepared for Railway hosting with:
+Testing and checks
 
-- `Procfile` to run Gunicorn via `config.wsgi`
-- `requirements.txt` for Python package installation
-- `runtime.txt` to pin the Python version
-- `config/settings.py` configured for environment-based secrets, debug mode, allowed hosts, and `DATABASE_URL`
-- `whitenoise` enabled for static file delivery
+- Run Django checks:
 
-### Railway setup
+```bash
+python manage.py check
+```
 
-1. Add the repository to Railway.
-2. Set Railway environment variables, including:
-   - `DJANGO_SECRET_KEY`
-   - `DJANGO_DEBUG=False`
-   - `DJANGO_ALLOWED_HOSTS=your-railway-app-url`
-   - `DATABASE_URL` (Postgres connection string)
-3. Run migrations after deployment:
-   - `python manage.py migrate`
+- Use automated tests (if added) with:
 
-For local setup, copy `.env.example` to `.env` and update the values.
+```bash
+python manage.py test
+```
+
+Notes & next steps for your presentation
+
+- The drone delivery feature includes models, forms, views and templates but may require wiring to a live telemetry source (drone GPS feed) for real-time tracking. For the demo you can manually update delivery coordinates via the delivery detail UI.
+- If you want live maps, add a lightweight JS map (Leaflet/Mapbox) and expose `DroneDelivery.tracking_coordinates` in an API endpoint.
+- To show a complete end-to-end flow for the presentation, create seed data for a supplier, a blood bank, a facility and one drone delivery request.
+
+If you want, I can:
+
+- add a simple management command to seed demo data,
+- add an API endpoint returning JSON coordinates for deliveries,
+- wire a small Leaflet map into `templates/drone/delivery_detail.html` for live demo.
+
+-----
+
+Updated on 2026-06-05.
